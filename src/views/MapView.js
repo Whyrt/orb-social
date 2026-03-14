@@ -1,7 +1,7 @@
 // src/views/MapView.js
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import L from 'leaflet';
 
@@ -15,7 +15,7 @@ import {
     viewAtom,
     themeAtom
 } from '@/atoms';
-import { useGeolocation, calculateDistance, isPointInCircle } from '@/hooks/useGeolocation';
+import { useGeolocation, calculateDistance } from '@/hooks/useGeolocation';
 import { useFriendLocations } from '@/hooks/useFriendLocations';
 import { useActions } from '@/lib/actions';
 
@@ -26,333 +26,16 @@ import 'leaflet/dist/leaflet.css';
 // REUSABLE COMPONENTS
 // ============================================
 
-function MapControlButton({ onClick, children, label, className = '', active = false }) {
+function MapControlButton({ onClick, children, label, className = '', active = false, title }) {
     return (
         <button
             className={`map-control-btn ${active ? 'active' : ''} ${className}`}
             onClick={onClick}
             aria-label={label}
-            title={label}
+            title={title || label}
         >
             {children}
         </button>
-    );
-}
-
-/**
- * Create enhanced pulse marker icon for user location
- * Includes pulsing ring, accuracy circle, and label
- */
-function createUserMarkerIcon(isDark = true) {
-    const accentColor = isDark ? '#ffffff' : '#1a1a1a';
-    const borderColor = isDark ? '#000000' : '#ffffff';
-    
-    console.log('🎨 Creating user marker icon, isDark:', isDark, 'accentColor:', accentColor);
-
-    // Создаём HTML элемент для маркера
-    const markerDiv = document.createElement('div');
-    markerDiv.className = 'enhanced-user-marker';
-    markerDiv.style.cssText = `
-        position: relative;
-        width: 60px;
-        height: 80px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-direction: column;
-    `;
-    
-    // Accuracy circle
-    const accuracyCircle = document.createElement('div');
-    accuracyCircle.style.cssText = `
-        position: absolute;
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        border: 2px solid ${accentColor};
-        opacity: 0.3;
-    `;
-    
-    // Outer pulse ring
-    const pulseOuter = document.createElement('div');
-    pulseOuter.style.cssText = `
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        background: ${accentColor};
-        animation: pulse-ring-outer 2s ease-out infinite;
-    `;
-    
-    // Inner pulse ring
-    const pulseInner = document.createElement('div');
-    pulseInner.style.cssText = `
-        position: absolute;
-        width: 70%;
-        height: 70%;
-        border-radius: 50%;
-        background: ${accentColor};
-        animation: pulse-ring-inner 1.5s ease-out infinite 0.3s;
-    `;
-    
-    // Center dot
-    const userDot = document.createElement('div');
-    userDot.style.cssText = `
-        position: relative;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: ${accentColor};
-        border: 3px solid ${borderColor};
-        box-shadow: 0 2px 12px rgba(0,0,0,0.4);
-        z-index: 3;
-    `;
-    
-    // User label
-    const label = document.createElement('div');
-    label.style.cssText = `
-        position: absolute;
-        bottom: -5px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 11px;
-        font-weight: 700;
-        color: ${accentColor};
-        text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-        white-space: nowrap;
-        z-index: 4;
-        font-family: 'SF Mono', Monaco, monospace;
-    `;
-    label.textContent = 'Вы';
-    
-    // Собираем всё вместе
-    markerDiv.appendChild(accuracyCircle);
-    markerDiv.appendChild(pulseOuter);
-    markerDiv.appendChild(pulseInner);
-    markerDiv.appendChild(userDot);
-    markerDiv.appendChild(label);
-    
-    console.log('🎨 Created marker element:', markerDiv);
-
-    return L.divIcon({
-        html: markerDiv,
-        className: 'enhanced-user-marker',
-        iconSize: [60, 80],
-        iconAnchor: [30, 40],
-        popupAnchor: [0, -45],
-    });
-}
-
-/**
- * Create friend marker icon with online status
- */
-function createFriendIcon(isOnline, isDark = true) {
-    const statusColor = isOnline ? '#4ade80' : '#6b7280';
-    const bgColor = isDark ? 'rgba(20, 20, 20, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-    const borderColor = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
-
-    return L.divIcon({
-        className: 'enhanced-friend-marker',
-        html: `
-            <div class="friend-marker-container">
-                <div class="friend-avatar" style="border-color: ${statusColor}; background: ${bgColor}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                </div>
-                <div class="friend-status-dot" style="background-color: ${statusColor}; border-color: ${borderColor}"></div>
-            </div>
-        `,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20],
-        popupAnchor: [0, -25],
-    });
-}
-
-/**
- * Mini Map Preview Component for MenuView
- * Shows a small interactive map with user location and nearby friends
- */
-export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, className = '' }) {
-    const mapRef = useRef(null);
-    const mapContainerRef = useRef(null);
-    const userLocation = useAtomValue(userLocationAtom);
-    const friendLocations = useAtomValue(friendLocationsAtom);
-    const theme = useAtomValue(themeAtom);
-    const [isInitialized, setIsInitialized] = useState(false);
-
-    // Initialize mini map
-    useEffect(() => {
-        // Check for window (SSR safety)
-        if (typeof window === 'undefined') return;
-        if (!mapContainerRef.current || mapRef.current) return;
-
-        try {
-            // Fix Leaflet icons
-            if (L.Icon.Default && L.Icon.Default.prototype._getIconUrl) {
-                delete L.Icon.Default.prototype._getIconUrl;
-            }
-            L.Icon.Default.mergeOptions({
-                iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-            });
-
-            // Create mini map with restricted controls
-            mapRef.current = L.map(mapContainerRef.current, {
-                zoomControl: false,
-                attributionControl: false,
-                zoomAnimation: true,
-                fadeAnimation: true,
-                minZoom: 10,
-                maxZoom: 16,
-                worldCopyJump: true,
-                center: userLocation ? [userLocation.latitude, userLocation.longitude] : [51.505, -0.09],
-                zoom: userLocation ? 14 : 13,
-                preferCanvas: true,
-                scrollWheelZoom: false,
-                doubleClickZoom: false,
-                touchZoom: false,
-                dragging: false,
-                zoomSnap: 0,
-            });
-
-            // Add tiles
-            const isDark = theme === 'dark' || theme === 'system';
-            const tileUrl = isDark 
-                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-
-            L.tileLayer(tileUrl, {
-                maxZoom: 16,
-                minZoom: 10,
-                attribution: '',
-                subdomains: 'abcd',
-                detectRetina: true,
-                updateWhenIdle: true,
-                keepBuffer: 2,
-                maxNativeZoom: 18,
-                crossOrigin: true,
-            }).addTo(mapRef.current);
-
-            setIsInitialized(true);
-
-        } catch (error) {
-            console.error('Mini map init error:', error);
-        }
-
-        return () => {
-            if (mapRef.current) {
-                mapRef.current.remove();
-                mapRef.current = null;
-            }
-        };
-    }, []);
-
-    // Update tiles on theme change
-    useEffect(() => {
-        if (!mapRef.current) return;
-
-        const isDark = theme === 'dark' || theme === 'system';
-        const tileUrl = isDark 
-            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-            : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-
-        // Remove existing tiles and add new ones
-        mapRef.current.eachLayer((layer) => {
-            if (layer instanceof L.TileLayer) {
-                mapRef.current.removeLayer(layer);
-            }
-        });
-
-        L.tileLayer(tileUrl, {
-            maxZoom: 16,
-            minZoom: 10,
-            attribution: '',
-            subdomains: 'abcd',
-            detectRetina: true,
-            updateWhenIdle: true,
-            keepBuffer: 2,
-            maxNativeZoom: 18,
-            crossOrigin: true,
-        }).addTo(mapRef.current);
-    }, [theme]);
-
-    // Update user marker
-    useEffect(() => {
-        if (!mapRef.current || !isInitialized) return;
-
-        // Clear existing markers
-        mapRef.current.eachLayer((layer) => {
-            if (layer instanceof L.Marker || layer instanceof L.Circle) {
-                mapRef.current.removeLayer(layer);
-            }
-        });
-
-        const center = userLocation 
-            ? [userLocation.latitude, userLocation.longitude] 
-            : [51.505, -0.09];
-        
-        mapRef.current.setView(center, userLocation ? 14 : 13, { animate: true });
-
-        if (userLocation) {
-            // Add user marker
-            const userIcon = createUserMarkerIcon(theme === 'dark');
-            L.marker([userLocation.latitude, userLocation.longitude], {
-                icon: userIcon,
-                zIndexOffset: 1000,
-            }).addTo(mapRef.current);
-
-            // Add accuracy circle
-            L.circle([userLocation.latitude, userLocation.longitude], {
-                radius: userLocation.accuracy || 20,
-                color: theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
-                fillColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                fillOpacity: 0.3,
-                weight: 1,
-            }).addTo(mapRef.current);
-        }
-
-        // Add friend markers
-        const isDark = theme === 'dark' || theme === 'system';
-        friendLocations.slice(0, 5).forEach((friend) => {
-            if (friend.latitude && friend.longitude) {
-                const friendIcon = createFriendIcon(friend.isOnline, isDark);
-                L.marker([friend.latitude, friend.longitude], {
-                    icon: friendIcon,
-                    zIndexOffset: 900,
-                }).addTo(mapRef.current);
-            }
-        });
-
-    }, [userLocation, friendLocations, isInitialized, theme]);
-
-    // Invalidate size when container changes
-    useEffect(() => {
-        if (mapRef.current && isInitialized) {
-            setTimeout(() => {
-                mapRef.current.invalidateSize({ animate: false });
-            }, 100);
-        }
-    }, [width, height, isInitialized]);
-
-    return (
-        <div className={`mini-map-preview ${className}`} style={{ width, height }}>
-            <div 
-                ref={mapContainerRef} 
-                className="mini-map-container"
-                onClick={onOpenMap}
-                style={{ width: '100%', height: '100%', cursor: 'pointer' }}
-            />
-            <div className="mini-map-overlay" onClick={onOpenMap}>
-                <span className="mini-map-label">Open Live Map</span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                    <polyline points="12 5 19 12 12 19"></polyline>
-                </svg>
-            </div>
-        </div>
     );
 }
 
@@ -427,9 +110,128 @@ function MapSearchBar({ friends, onFriendSelect }) {
 }
 
 // ============================================
-// MAP MARKERS (Legacy - using enhanced versions above)
+// SIMPLE USER MARKER - MAXIMUM RELIABILITY
 // ============================================
-// Note: Using createUserMarkerIcon and createFriendIcon from above
+
+function createUserMarker(isDark = true) {
+    const color = isDark ? '#ffffff' : '#000000';
+    const borderColor = isDark ? '#000000' : '#ffffff';
+    
+    // Создаём HTML строку - максимально просто
+    const html = `
+        <div style="
+            position: relative;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        ">
+            <!-- Pulsing ring -->
+            <div style="
+                position: absolute;
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: ${color};
+                opacity: 0.3;
+                animation: pulse 1.5s ease-out infinite;
+            "></div>
+            
+            <!-- Center dot -->
+            <div style="
+                position: relative;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background: ${color};
+                border: 3px solid ${borderColor};
+                box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+                z-index: 10;
+            "></div>
+            
+            <!-- Label -->
+            <div style="
+                position: absolute;
+                bottom: -8px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 10px;
+                font-weight: 700;
+                color: ${color};
+                text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+                white-space: nowrap;
+                background: ${isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)'};
+                padding: 2px 6px;
+                border-radius: 4px;
+                z-index: 11;
+            ">ВЫ</div>
+        </div>
+    `;
+    
+    return L.divIcon({
+        html: html,
+        className: 'user-marker',
+        iconSize: [50, 50],
+        iconAnchor: [25, 25],
+        popupAnchor: [0, -30]
+    });
+}
+
+// ============================================
+// FRIEND MARKER
+// ============================================
+
+function createFriendMarker(isOnline, isDark = true) {
+    const color = isOnline ? '#4ade80' : '#6b7280';
+    const bgColor = isDark ? 'rgba(20,20,20,0.95)' : 'rgba(255,255,255,0.95)';
+    
+    const html = `
+        <div style="
+            position: relative;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        ">
+            <div style="
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                background: ${bgColor};
+                border: 2.5px solid ${color};
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            ">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${color}" strokeWidth="1.5">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </div>
+            <div style="
+                position: absolute;
+                bottom: -2px;
+                right: -2px;
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background: ${color};
+                border: 2px solid ${bgColor};
+            "></div>
+        </div>
+    `;
+    
+    return L.divIcon({
+        html: html,
+        className: 'friend-marker',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+        popupAnchor: [0, -25]
+    });
+}
 
 // ============================================
 // FOG OF WAR OVERLAY
@@ -485,7 +287,7 @@ class FogOfWarOverlay extends L.Layer {
 
         ctx.clearRect(0, 0, size.x, size.y);
 
-        const fogColor = this.theme === 'dark' 
+        const fogColor = this.theme === 'dark'
             ? 'rgba(10, 10, 10, 0.7)'
             : 'rgba(240, 240, 240, 0.6)';
 
@@ -538,6 +340,178 @@ class FogOfWarOverlay extends L.Layer {
 }
 
 // ============================================
+// MINI MAP PREVIEW (for MenuView)
+// ============================================
+
+export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, className = '' }) {
+    const mapRef = useRef(null);
+    const mapContainerRef = useRef(null);
+    const userLocation = useAtomValue(userLocationAtom);
+    const friendLocations = useAtomValue(friendLocationsAtom);
+    const theme = useAtomValue(themeAtom);
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!mapContainerRef.current || mapRef.current) return;
+
+        try {
+            if (L.Icon.Default && L.Icon.Default.prototype._getIconUrl) {
+                delete L.Icon.Default.prototype._getIconUrl;
+            }
+            L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            });
+
+            mapRef.current = L.map(mapContainerRef.current, {
+                zoomControl: false,
+                attributionControl: false,
+                zoomAnimation: true,
+                fadeAnimation: true,
+                minZoom: 10,
+                maxZoom: 16,
+                worldCopyJump: true,
+                center: userLocation ? [userLocation.latitude, userLocation.longitude] : [51.505, -0.09],
+                zoom: userLocation ? 14 : 13,
+                preferCanvas: true,
+                scrollWheelZoom: false,
+                doubleClickZoom: false,
+                touchZoom: false,
+                dragging: false,
+                zoomSnap: 0,
+            });
+
+            const isDark = theme === 'dark' || theme === 'system';
+            const tileUrl = isDark 
+                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+            L.tileLayer(tileUrl, {
+                maxZoom: 16,
+                minZoom: 10,
+                attribution: '',
+                subdomains: 'abcd',
+                detectRetina: true,
+                updateWhenIdle: true,
+                keepBuffer: 2,
+                maxNativeZoom: 18,
+                crossOrigin: true,
+            }).addTo(mapRef.current);
+
+            setIsInitialized(true);
+        } catch (error) {
+            console.error('Mini map init error:', error);
+        }
+
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!mapRef.current) return;
+
+        const isDark = theme === 'dark' || theme === 'system';
+        const tileUrl = isDark 
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+        mapRef.current.eachLayer((layer) => {
+            if (layer instanceof L.TileLayer) {
+                mapRef.current.removeLayer(layer);
+            }
+        });
+
+        L.tileLayer(tileUrl, {
+            maxZoom: 16,
+            minZoom: 10,
+            attribution: '',
+            subdomains: 'abcd',
+            detectRetina: true,
+            updateWhenIdle: true,
+            keepBuffer: 2,
+            maxNativeZoom: 18,
+            crossOrigin: true,
+        }).addTo(mapRef.current);
+    }, [theme]);
+
+    useEffect(() => {
+        if (!mapRef.current || !isInitialized) return;
+
+        mapRef.current.eachLayer((layer) => {
+            if (layer instanceof L.Marker || layer instanceof L.Circle) {
+                mapRef.current.removeLayer(layer);
+            }
+        });
+
+        const center = userLocation 
+            ? [userLocation.latitude, userLocation.longitude] 
+            : [51.505, -0.09];
+        
+        mapRef.current.setView(center, userLocation ? 14 : 13, { animate: true });
+
+        if (userLocation) {
+            const userIcon = createUserMarker(theme === 'dark');
+            L.marker([userLocation.latitude, userLocation.longitude], {
+                icon: userIcon,
+                zIndexOffset: 1000,
+            }).addTo(mapRef.current);
+
+            L.circle([userLocation.latitude, userLocation.longitude], {
+                radius: userLocation.accuracy || 20,
+                color: theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
+                fillColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                fillOpacity: 0.3,
+                weight: 1,
+            }).addTo(mapRef.current);
+        }
+
+        const isDark = theme === 'dark' || theme === 'system';
+        friendLocations.slice(0, 5).forEach((friend) => {
+            if (friend.latitude && friend.longitude) {
+                const friendIcon = createFriendMarker(friend.isOnline, isDark);
+                L.marker([friend.latitude, friend.longitude], {
+                    icon: friendIcon,
+                    zIndexOffset: 900,
+                }).addTo(mapRef.current);
+            }
+        });
+
+    }, [userLocation, friendLocations, isInitialized, theme]);
+
+    useEffect(() => {
+        if (mapRef.current && isInitialized) {
+            setTimeout(() => {
+                mapRef.current.invalidateSize({ animate: false });
+            }, 100);
+        }
+    }, [width, height, isInitialized]);
+
+    return (
+        <div className={`mini-map-preview ${className}`} style={{ width, height }}>
+            <div 
+                ref={mapContainerRef} 
+                className="mini-map-container"
+                onClick={onOpenMap}
+                style={{ width: '100%', height: '100%', cursor: 'pointer' }}
+            />
+            <div className="mini-map-overlay" onClick={onOpenMap}>
+                <span className="mini-map-label">Open Live Map</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+            </div>
+        </div>
+    );
+}
+
+// ============================================
 // MAIN MAP COMPONENT
 // ============================================
 
@@ -567,12 +541,12 @@ function MapViewContent() {
     const [tileError, setTileError] = useState(false);
     const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
 
-    // Debug: Log user location changes
+    // Debug: Log user location
     useEffect(() => {
-        console.log('📍 UserLocation updated:', userLocation);
+        console.log('📍 UserLocation:', userLocation);
     }, [userLocation]);
 
-    // Load explored zones from localStorage
+    // Load explored zones
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const saved = localStorage.getItem('orb_explored_zones');
@@ -586,10 +560,9 @@ function MapViewContent() {
         }
     }, [setExploredZones]);
 
-    // Check location permission with mobile support
+    // Check location permission
     useEffect(() => {
         if (!('permissions' in navigator)) {
-            // iOS Safari doesn't support permissions API
             setLocationPermission('prompt');
             return;
         }
@@ -600,11 +573,9 @@ function MapViewContent() {
                 result.onchange = () => setLocationPermission(result.state);
             })
             .catch(() => {
-                // Fallback for browsers without permissions API
                 setLocationPermission('prompt');
             });
 
-        // Monitor online status
         const handleOnline = () => setIsOnline(true);
         const handleOffline = () => setIsOnline(false);
 
@@ -617,26 +588,24 @@ function MapViewContent() {
         };
     }, []);
 
-    // Initialize map with mobile optimizations
+    // Initialize map
     useEffect(() => {
         if (typeof window === 'undefined') return;
         if (!mapContainerRef.current) return;
         if (mapRef.current || initAttemptedRef.current) return;
 
         initAttemptedRef.current = true;
+        console.log('🗺️ Initializing map...');
 
         try {
-            // Fix Leaflet marker icons
-            if (L.Icon.Default && L.Icon.Default.prototype._getIconUrl) {
-                delete L.Icon.Default.prototype._getIconUrl;
-            }
+            // Fix Leaflet default icons
+            delete L.Icon.Default.prototype._getIconUrl;
             L.Icon.Default.mergeOptions({
                 iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
                 iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
                 shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
             });
 
-            // Create map with mobile-optimized settings
             mapRef.current = L.map(mapContainerRef.current, {
                 zoomControl: false,
                 attributionControl: false,
@@ -644,19 +613,18 @@ function MapViewContent() {
                 fadeAnimation: true,
                 markerZoomAnimation: true,
                 minZoom: 2,
-                maxZoom: 19, // Extended max zoom for better detail
+                maxZoom: 19,
                 worldCopyJump: true,
                 center: [51.505, -0.09],
                 zoom: 13,
-                preferCanvas: true, // Better mobile performance
-                zoomSnap: 0.5, // Smoother zoom on mobile
-                wheelDebounceTime: 150, // Prevent excessive zooming
-                zoomDelta: 0.5, // Finer zoom steps
+                preferCanvas: true,
+                zoomSnap: 0.5,
+                wheelDebounceTime: 150,
+                zoomDelta: 0.5,
             });
 
             setMapInstance(mapRef.current);
 
-            // Add zoom controls in bottom-right position
             L.control.zoom({
                 position: 'bottomright',
                 zoomInText: '+',
@@ -669,9 +637,10 @@ function MapViewContent() {
             }).addTo(mapRef.current);
 
             setMapLoaded(true);
+            console.log('✅ Map initialized successfully');
 
         } catch (error) {
-            console.error('Map initialization error:', error);
+            console.error('❌ Map initialization error:', error);
             setInitError(error.message);
         }
 
@@ -684,11 +653,10 @@ function MapViewContent() {
         };
     }, [setMapInstance]);
 
-    // Update map tiles with improved caching and max zoom handling
+    // Update tiles
     useEffect(() => {
         if (!mapRef.current || !mapLoaded) return;
 
-        // CartoDB tiles WITH LABELS for context
         const tileLayers = {
             dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
             light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
@@ -696,24 +664,22 @@ function MapViewContent() {
 
         const tileUrl = theme === 'dark' ? tileLayers.dark : tileLayers.light;
 
-        // Remove existing tiles
         if (tileLayerRef.current) {
             mapRef.current.removeLayer(tileLayerRef.current);
         }
 
-        // Add new tiles with enhanced mobile caching and zoom handling
         tileLayerRef.current = L.tileLayer(tileUrl, {
-            maxZoom: 19, // Support higher zoom levels
+            maxZoom: 19,
             minZoom: 2,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
             detectRetina: true,
-            updateWhenIdle: false, // Keep updating tiles during pan
-            updateWhenZooming: true, // Show tiles during zoom
-            keepBuffer: 4, // Keep more tiles in buffer for smoother panning
-            maxNativeZoom: 18, // Native tile resolution
-            crossOrigin: true, // Enable CORS for service worker caching
-            errorTileUrl: '', // Don't show error tiles
+            updateWhenIdle: false,
+            updateWhenZooming: true,
+            keepBuffer: 4,
+            maxNativeZoom: 18,
+            crossOrigin: true,
+            errorTileUrl: '',
             tileSize: 256,
             zoomOffset: 0,
         });
@@ -729,7 +695,6 @@ function MapViewContent() {
 
         tileLayerRef.current.addTo(mapRef.current);
 
-        // Invalidate size after tiles load (fixes mobile display issues)
         setTimeout(() => {
             if (mapRef.current) {
                 mapRef.current.invalidateSize();
@@ -760,49 +725,56 @@ function MapViewContent() {
         fogOverlayRef.current.setTheme(theme);
     }, [exploredZones, mapSettings.showFogOfWar, theme]);
 
-    // Update user marker with enhanced pulsing animation
+    // CRITICAL: Update user marker - simplified and reliable
     useEffect(() => {
-        if (!mapRef.current) {
-            console.warn('Map ref not ready');
+        console.log('🔍 Marker update effect triggered');
+        console.log('  - mapRef.current:', !!mapRef.current);
+        console.log('  - mapLoaded:', mapLoaded);
+        console.log('  - userLocation:', userLocation);
+
+        if (!mapRef.current || !mapLoaded) {
+            console.log('  ⚠️ Map not ready');
             return;
         }
-        
+
         if (!userLocation) {
-            console.warn('User location not available');
+            console.log('  ⚠️ No user location yet');
             return;
         }
 
         const { latitude, longitude } = userLocation;
         const isDark = theme === 'dark' || theme === 'system';
         
-        console.log('📍 Updating user marker:', { latitude, longitude, accuracy: userLocation.accuracy, isDark });
+        console.log('  📍 Creating marker at:', { latitude, longitude });
 
         // Remove existing marker
         if (userMarkerRef.current) {
             mapRef.current.removeLayer(userMarkerRef.current);
             userMarkerRef.current = null;
+            console.log('  🗑️ Removed old marker');
         }
 
         try {
-            // Create enhanced user marker with pulse animation
-            const userIcon = createUserMarkerIcon(isDark);
-            console.log('🎨 Created user icon:', userIcon);
-            
+            // Create and add new marker
+            const userIcon = createUserMarker(isDark);
             userMarkerRef.current = L.marker([latitude, longitude], {
                 icon: userIcon,
                 zIndexOffset: 1000
-            }).addTo(mapRef.current);
+            });
             
-            console.log('✅ Marker added to map');
+            userMarkerRef.current.addTo(mapRef.current);
+            console.log('  ✅ Marker added to map');
 
-            const locationLabel = userLocation.isMock ? '🧪 Demo Location' : 'Вы';
+            // Add popup
+            const locationLabel = userLocation.isMock ? '🧪 Демо' : 'Вы';
             userMarkerRef.current.bindPopup(`
-                <div class="location-popup">
+                <div class="location-popup" style="text-align: center;">
                     <strong>${locationLabel}</strong><br/>
                     <small>Точность: ${Math.round(userLocation.accuracy)}м</small>
                 </div>
             `);
 
+            // Auto-follow if enabled
             if (mapSettings.followUser) {
                 mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15, {
                     animate: true,
@@ -810,14 +782,14 @@ function MapViewContent() {
                 });
             }
         } catch (error) {
-            console.error('❌ Error creating user marker:', error);
+            console.error('  ❌ Error creating marker:', error);
         }
 
-    }, [userLocation, mapSettings.followUser, theme]);
+    }, [userLocation, mapLoaded, mapSettings.followUser, theme]);
 
-    // Update friend markers with enhanced icons
+    // Update friend markers
     useEffect(() => {
-        if (!mapRef.current) return;
+        if (!mapRef.current || !mapLoaded) return;
 
         const currentFriendIds = new Set();
         const isDark = theme === 'dark' || theme === 'system';
@@ -832,7 +804,7 @@ function MapViewContent() {
             }
 
             const marker = L.marker([friend.latitude, friend.longitude], {
-                icon: createFriendIcon(friend.isOnline, isDark),
+                icon: createFriendMarker(friend.isOnline, isDark),
                 zIndexOffset: 900
             }).addTo(mapRef.current);
 
@@ -857,7 +829,7 @@ function MapViewContent() {
             }
         });
 
-    }, [friendLocations, formatLastSeen, theme]);
+    }, [friendLocations, formatLastSeen, mapLoaded, theme]);
 
     // Handlers
     const handleLocateMe = useCallback(async () => {
@@ -867,7 +839,6 @@ function MapViewContent() {
                 duration: 0.5
             });
         } else {
-            // Request location if not available
             try {
                 const position = await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -876,11 +847,11 @@ function MapViewContent() {
                         maximumAge: 0
                     });
                 });
-                
+
                 if (mapRef.current) {
                     mapRef.current.setView(
-                        [position.coords.latitude, position.coords.longitude], 
-                        16, 
+                        [position.coords.latitude, position.coords.longitude],
+                        16,
                         { animate: true, duration: 0.5 }
                     );
                 }
@@ -907,10 +878,6 @@ function MapViewContent() {
 
     const handleBack = useCallback(() => {
         setView('menu');
-    }, [setView]);
-
-    const handleProfileClick = useCallback(() => {
-        setView('profile');
     }, [setView]);
 
     const toggleLayer = useCallback(() => {
@@ -951,7 +918,7 @@ function MapViewContent() {
                 style={{ width: '100%', height: '100%', minHeight: '100vh' }}
             />
 
-            {/* TOP LEFT: Back Button (40px) */}
+            {/* TOP LEFT: Back Button */}
             <div className="map-controls-top-left">
                 <MapControlButton onClick={handleBack} label="Back to Menu" className="control-back">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -961,7 +928,7 @@ function MapViewContent() {
                 </MapControlButton>
             </div>
 
-            {/* TOP RIGHT: Theme Toggle + Settings (vertical stack, 40px each) */}
+            {/* TOP RIGHT: Controls */}
             <div className="map-controls-top-right">
                 <MapControlButton onClick={toggleDemoMode} label="Demo Mode" active={isDemoMode} className="control-demo" title={isDemoMode ? 'Demo: ON' : 'Demo: OFF'}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -985,7 +952,7 @@ function MapViewContent() {
                 </MapControlButton>
             </div>
 
-            {/* BOTTOM LEFT: Stats cards (explored km², friends nearby) */}
+            {/* BOTTOM LEFT: Stats */}
             <div className="map-controls-bottom-left">
                 <MapControlButton onClick={toggleStats} label="Stats" active={showStats} className="control-stats">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -995,7 +962,7 @@ function MapViewContent() {
                 </MapControlButton>
             </div>
 
-            {/* BOTTOM CENTER: Search bar (full width minus padding) */}
+            {/* BOTTOM CENTER: Search */}
             <div className="map-controls-bottom-center">
                 <MapSearchBar
                     friends={friendLocations.map(fl => fl.user).filter(Boolean)}
@@ -1003,7 +970,7 @@ function MapViewContent() {
                 />
             </div>
 
-            {/* BOTTOM RIGHT: Locate me button + Zoom controls (vertical stack) */}
+            {/* BOTTOM RIGHT: Locate + Follow */}
             <div className="map-controls-bottom-right">
                 <MapControlButton onClick={handleLocateMe} label="Locate Me" className="control-locate">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1090,13 +1057,7 @@ function MapViewContent() {
                             <line x1="12" y1="16" x2="12.01" y2="16"></line>
                         </svg>
                         <p><strong>Location Access Denied</strong></p>
-                        <p className="warning-subtext">To enable location sharing:</p>
-                        <ol className="warning-steps">
-                            <li>Tap the lock icon in your browser</li>
-                            <li>Enable "Location" permission</li>
-                            <li>Refresh the page</li>
-                        </ol>
-                        <p className="warning-subtext">Or use demo location in settings.</p>
+                        <p className="warning-subtext">Используйте демо-режим для просмотра карты</p>
                     </div>
                 </div>
             )}
@@ -1111,7 +1072,7 @@ function MapViewContent() {
                             <line x1="12" y1="16" x2="12.01" y2="16"></line>
                         </svg>
                         <p>Map failed to load: {initError}</p>
-                        <button 
+                        <button
                             className="retry-button"
                             onClick={() => window.location.reload()}
                         >

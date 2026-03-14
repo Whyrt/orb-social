@@ -1152,6 +1152,18 @@
     font-size: 11px;
     font-weight: 600;
     box-shadow: 0 2px 12px rgba(251, 191, 36, 0.3);
+    animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.02);
+    }
 }
 
 .demo-badge svg {
@@ -1161,4 +1173,19 @@
 .demo-badge span {
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+/* ============================================
+   KEYFRAME ANIMATIONS FOR MARKERS
+   ============================================ */
+
+@keyframes pulse {
+    0% {
+        transform: scale(0.5);
+        opacity: 0.5;
+    }
+    100% {
+        transform: scale(1.5);
+        opacity: 0;
+    }
 }
