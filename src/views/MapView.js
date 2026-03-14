@@ -45,18 +45,98 @@ function MapControlButton({ onClick, children, label, className = '', active = f
  */
 function createUserMarkerIcon(isDark = true) {
     const accentColor = isDark ? '#ffffff' : '#1a1a1a';
+    const borderColor = isDark ? '#000000' : '#ffffff';
     
+    console.log('🎨 Creating user marker icon, isDark:', isDark, 'accentColor:', accentColor);
+
+    // Создаём HTML элемент для маркера
+    const markerDiv = document.createElement('div');
+    markerDiv.className = 'enhanced-user-marker';
+    markerDiv.style.cssText = `
+        position: relative;
+        width: 60px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    `;
+    
+    // Accuracy circle
+    const accuracyCircle = document.createElement('div');
+    accuracyCircle.style.cssText = `
+        position: absolute;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 2px solid ${accentColor};
+        opacity: 0.3;
+    `;
+    
+    // Outer pulse ring
+    const pulseOuter = document.createElement('div');
+    pulseOuter.style.cssText = `
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: ${accentColor};
+        animation: pulse-ring-outer 2s ease-out infinite;
+    `;
+    
+    // Inner pulse ring
+    const pulseInner = document.createElement('div');
+    pulseInner.style.cssText = `
+        position: absolute;
+        width: 70%;
+        height: 70%;
+        border-radius: 50%;
+        background: ${accentColor};
+        animation: pulse-ring-inner 1.5s ease-out infinite 0.3s;
+    `;
+    
+    // Center dot
+    const userDot = document.createElement('div');
+    userDot.style.cssText = `
+        position: relative;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: ${accentColor};
+        border: 3px solid ${borderColor};
+        box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+        z-index: 3;
+    `;
+    
+    // User label
+    const label = document.createElement('div');
+    label.style.cssText = `
+        position: absolute;
+        bottom: -5px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 11px;
+        font-weight: 700;
+        color: ${accentColor};
+        text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        white-space: nowrap;
+        z-index: 4;
+        font-family: 'SF Mono', Monaco, monospace;
+    `;
+    label.textContent = 'Вы';
+    
+    // Собираем всё вместе
+    markerDiv.appendChild(accuracyCircle);
+    markerDiv.appendChild(pulseOuter);
+    markerDiv.appendChild(pulseInner);
+    markerDiv.appendChild(userDot);
+    markerDiv.appendChild(label);
+    
+    console.log('🎨 Created marker element:', markerDiv);
+
     return L.divIcon({
+        html: markerDiv,
         className: 'enhanced-user-marker',
-        html: `
-            <div class="user-marker-container">
-                <div class="accuracy-circle"></div>
-                <div class="pulse-ring-outer"></div>
-                <div class="pulse-ring-inner"></div>
-                <div class="user-dot" style="background: ${accentColor}"></div>
-                <div class="user-label" style="color: ${accentColor}">You</div>
-            </div>
-        `,
         iconSize: [60, 80],
         iconAnchor: [30, 40],
         popupAnchor: [0, -45],
@@ -487,6 +567,11 @@ function MapViewContent() {
     const [tileError, setTileError] = useState(false);
     const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
 
+    // Debug: Log user location changes
+    useEffect(() => {
+        console.log('📍 UserLocation updated:', userLocation);
+    }, [userLocation]);
+
     // Load explored zones from localStorage
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -677,34 +762,55 @@ function MapViewContent() {
 
     // Update user marker with enhanced pulsing animation
     useEffect(() => {
-        if (!mapRef.current || !userLocation) return;
+        if (!mapRef.current) {
+            console.warn('Map ref not ready');
+            return;
+        }
+        
+        if (!userLocation) {
+            console.warn('User location not available');
+            return;
+        }
 
         const { latitude, longitude } = userLocation;
         const isDark = theme === 'dark' || theme === 'system';
+        
+        console.log('📍 Updating user marker:', { latitude, longitude, accuracy: userLocation.accuracy, isDark });
 
+        // Remove existing marker
         if (userMarkerRef.current) {
             mapRef.current.removeLayer(userMarkerRef.current);
+            userMarkerRef.current = null;
         }
 
-        // Create enhanced user marker with pulse animation
-        userMarkerRef.current = L.marker([latitude, longitude], {
-            icon: createUserMarkerIcon(isDark),
-            zIndexOffset: 1000
-        }).addTo(mapRef.current);
+        try {
+            // Create enhanced user marker with pulse animation
+            const userIcon = createUserMarkerIcon(isDark);
+            console.log('🎨 Created user icon:', userIcon);
+            
+            userMarkerRef.current = L.marker([latitude, longitude], {
+                icon: userIcon,
+                zIndexOffset: 1000
+            }).addTo(mapRef.current);
+            
+            console.log('✅ Marker added to map');
 
-        const locationLabel = userLocation.isMock ? '🧪 Demo Location' : 'You';
-        userMarkerRef.current.bindPopup(`
-            <div class="location-popup">
-                <strong>${locationLabel}</strong><br/>
-                <small>Accuracy: ${Math.round(userLocation.accuracy)}m</small>
-            </div>
-        `);
+            const locationLabel = userLocation.isMock ? '🧪 Demo Location' : 'Вы';
+            userMarkerRef.current.bindPopup(`
+                <div class="location-popup">
+                    <strong>${locationLabel}</strong><br/>
+                    <small>Точность: ${Math.round(userLocation.accuracy)}м</small>
+                </div>
+            `);
 
-        if (mapSettings.followUser) {
-            mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15, {
-                animate: true,
-                duration: 0.5
-            });
+            if (mapSettings.followUser) {
+                mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15, {
+                    animate: true,
+                    duration: 0.5
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error creating user marker:', error);
         }
 
     }, [userLocation, mapSettings.followUser, theme]);
