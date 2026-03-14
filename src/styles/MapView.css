@@ -525,6 +525,14 @@
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 1px;
+    margin: 0;
+}
+
+.offline-note {
+    font-size: 11px;
+    opacity: 0.7;
+    text-transform: none;
+    letter-spacing: 0;
 }
 
 .loading-spinner {
@@ -563,12 +571,12 @@
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--error);
     border-radius: 16px;
-    padding: 20px;
+    padding: 24px;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 12px;
+    gap: 16px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     animation: warning-appear 0.3s ease;
 }
@@ -586,13 +594,90 @@
 
 .warning-content svg {
     color: var(--error);
+    flex-shrink: 0;
 }
 
 .warning-content p {
     color: var(--foreground);
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
     margin: 0;
+}
+
+.warning-subtext {
+    color: var(--foreground-muted) !important;
+    font-size: 13px !important;
+}
+
+.warning-steps {
+    text-align: left;
+    color: var(--foreground);
+    font-size: 13px;
+    line-height: 1.8;
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.warning-steps li {
+    margin-bottom: 4px;
+}
+
+.retry-button {
+    margin-top: 8px;
+    padding: 10px 20px;
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.retry-button:hover {
+    opacity: 0.9;
+    transform: scale(1.02);
+}
+
+/* ============================================
+   CONNECTION WARNING (Offline)
+   ============================================ */
+
+.connection-warning {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 600;
+    width: 100%;
+    max-width: 340px;
+    padding: 0 16px;
+    animation: slide-down 0.3s ease;
+}
+
+@keyframes slide-down {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -20px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.connection-warning .warning-content {
+    border-color: var(--warning, #f59e0b);
+    padding: 16px 20px;
+}
+
+.connection-warning .warning-content svg {
+    color: var(--warning, #f59e0b);
+}
+
+.connection-warning .warning-content p {
+    font-size: 13px;
 }
 
 /* ============================================
@@ -629,6 +714,118 @@
 @media (min-width: 768px) {
     .map-controls-bottom-center {
         max-width: 500px;
+    }
+}
+
+/* Mobile optimizations */
+@media (max-width: 767px) {
+    .map-control-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    .map-control-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .map-controls-top-left,
+    .map-controls-top-right {
+        top: env(safe-area-inset-top, 12px);
+    }
+
+    .map-controls-top-left {
+        left: env(safe-area-inset-left, 12px);
+    }
+
+    .map-controls-top-right {
+        right: env(safe-area-inset-right, 12px);
+    }
+
+    .map-controls-bottom-left {
+        bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+        left: env(safe-area-inset-left, 12px);
+    }
+
+    .map-controls-bottom-center {
+        bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+        width: calc(100% - 48px);
+    }
+
+    .map-search-container {
+        border-radius: 24px;
+    }
+
+    .map-search {
+        padding: 12px 40px 12px 44px;
+        font-size: 15px; /* Prevents iOS zoom on input focus */
+    }
+
+    /* Larger touch targets for mobile */
+    .map-search-result-item {
+        padding: 12px 16px;
+        min-height: 52px;
+    }
+
+    .stat-item {
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+
+    /* Adjust warning positions for mobile */
+    .location-permission-warning,
+    .connection-warning {
+        max-width: calc(100% - 32px);
+    }
+
+    .warning-content {
+        padding: 20px;
+    }
+}
+
+/* iOS Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+    .map-container {
+        min-height: -webkit-fill-available;
+    }
+
+    .map-view-container {
+        min-height: 100vh;
+        min-height: 100dvh;
+    }
+
+    /* Prevent iOS rubber band scrolling */
+    .map-view-container {
+        position: fixed;
+        overflow: hidden;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .map-control-btn {
+        border-width: 2px;
+    }
+
+    .stat-item,
+    .warning-content {
+        border-width: 2px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .custom-pulse-marker .pulse-ring,
+    .leaflet-popup-content-wrapper,
+    .map-search-results,
+    .map-stats-panel,
+    .warning-content,
+    .connection-warning {
+        animation: none;
+    }
+
+    .map-control-btn:hover {
+        transform: none;
     }
 }
 

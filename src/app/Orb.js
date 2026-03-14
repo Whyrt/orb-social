@@ -29,6 +29,7 @@ import ProfileView from '@/views/ProfileView';
 import FriendsManageView from '@/views/FriendsManageView';
 import InvitesView from '@/views/InvitesView';
 import ChatView from '@/views/ChatView';
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 
 // Dynamic import for MapView with SSR disabled (Leaflet requires browser)
 import dynamic from 'next/dynamic';
@@ -218,10 +219,11 @@ function OrbContent() {
     });
 
     return (
-        <div {...bindSwipes()} 
+        <div {...bindSwipes()}
              className={`fixed inset-0 w-full h-[100dvh] overflow-hidden touch-none select-none ${isDesktop ? 'desktop-centered' : ''}`}
              style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
             <GlobalStyles />
+            <ServiceWorkerRegistration />
             <PersistentPlayer player={globalPlayer} setPlayer={setGlobalPlayerState} audioRef={audioRef} />
             <ToastContainer toasts={toasts} />
 
@@ -240,7 +242,7 @@ function OrbContent() {
                     <NeuralSphere view={view} audioData={audioData} globalPlayer={globalPlayer} />
                 </Canvas>
             </div>
-            
+
             {/* Main interface layer */}
             <div key={view} className="relative z-[100] w-full h-full animate-soft-switch">
                 <Interface />

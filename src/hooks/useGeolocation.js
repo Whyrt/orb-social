@@ -1,13 +1,13 @@
 // src/hooks/useGeolocation.js
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { userLocationAtom, exploredZonesAtom, locationSharingAtom, userAtom } from '@/atoms';
 import { supabase } from '@/lib/supabase';
 
 /**
- * Mock geolocation for development (London coordinates)
+ * Demo location (London) for fallback
  */
-const MOCK_LOCATION = {
+const DEMO_LOCATION = {
     coords: {
         latitude: 51.505,
         longitude: -0.09,
@@ -16,54 +16,85 @@ const MOCK_LOCATION = {
         speed: 0
     },
     timestamp: Date.now(),
-    isMock: true
+    isMock: true,
+    isDemo: true
 };
 
 /**
- * Get geolocation with mock support for development
+ * Check if HTTPS is enabled
  */
-const getGeolocation = () => {
-    // Check if mock mode is enabled in localStorage
-    const useMock = typeof window !== 'undefined' && localStorage.getItem('orb_mock_location') === 'true';
-    const isDevelopment = process.env.NODE_ENV === 'development';
+const isSecureContext = typeof window !== 'undefined' && window.isSecureContext;
 
-    if ((isDevelopment && useMock) || useMock) {
-        console.log('🧪 Using mock location (London)');
-        return Promise.resolve({
-            ...MOCK_LOCATION,
-            timestamp: Date.now()
-        });
+/**
+ * Get geolocation with comprehensive mobile support and fallback
+ */
+export const getGeolocation = async (options = {}) => {
+    const { 
+        useDemo = false, 
+        enableHighAccuracy = true, 
+        timeout = 15000,
+        maximumAge = 0 
+    } = options;
+
+    // Force demo mode if requested
+    if (useDemo) {
+        console.log('🧪 Using demo location (London)');
+        return { ...DEMO_LOCATION, timestamp: Date.now() };
     }
 
-    // Production: real geolocation
-    return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject(new Error('Geolocation is not supported by this browser.'));
-            return;
-        }
+    // Check if geolocation is supported
+    if (!navigator.geolocation) {
+        throw new Error('Geolocation is not supported by this browser.');
+    }
 
+    // Check HTTPS (required for geolocation on most browsers)
+    if (!isSecureContext && process.env.NODE_ENV === 'production') {
+        console.warn('⚠️ Geolocation requires HTTPS. Using demo location.');
+        return { ...DEMO_LOCATION, timestamp: Date.now(), isDemo: true };
+    }
+
+    return new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 resolve({
                     coords: position.coords,
                     timestamp: position.timestamp,
-                    isMock: false
+                    isMock: false,
+                    isDemo: false
                 });
             },
             (error) => {
+                const errorMessage = getGeolocationErrorMessage(error);
+                console.warn('Geolocation error:', errorMessage);
                 reject(error);
             },
             {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 5000
+                enableHighAccuracy,
+                timeout,
+                maximumAge
             }
         );
     });
 };
 
 /**
- * Custom hook for managing user geolocation
+ * Get user-friendly error message for geolocation errors
+ */
+function getGeolocationErrorMessage(error) {
+    switch (error.code) {
+        case error.PERMISSION_DENIED:
+            return 'Location permission denied. Please enable in browser settings.';
+        case error.POSITION_UNAVAILABLE:
+            return 'Location information unavailable. Check GPS settings.';
+        case error.TIMEOUT:
+            return 'Location request timed out. Please try again.';
+        default:
+            return 'An unknown error occurred while getting location.';
+    }
+}
+
+/**
+ * Custom hook for managing user geolocation with mobile optimizations
  */
 export function useGeolocation() {
     const setUserLocation = useSetAtom(userLocationAtom);
@@ -74,7 +105,9 @@ export function useGeolocation() {
     const watchIdRef = useRef(null);
     const channelRef = useRef(null);
     const lastUpdateRef = useRef(0);
-    const mockWatchIntervalRef = useRef(null);
+    const demoWatchIntervalRef = useRef(null);
+    const [error, setError] = useState(null);
+    const [permissionState, setPermissionState] = useState('prompt');
 
     /**
      * Add explored zone when user moves
@@ -158,6 +191,7 @@ export function useGeolocation() {
     const handlePositionUpdate = useCallback((positionData) => {
         const { latitude, longitude, accuracy, heading, speed } = positionData.coords;
         const isMock = positionData.isMock || false;
+        const isDemo = positionData.isDemo || false;
 
         setUserLocation({
             latitude,
@@ -166,67 +200,100 @@ export function useGeolocation() {
             heading,
             speed,
             timestamp: positionData.timestamp,
-            isMock
+            isMock,
+            isDemo
         });
 
         addExploredZone(latitude, longitude);
         broadcastLocation(latitude, longitude, accuracy);
         persistLocation(latitude, longitude, accuracy);
+        setError(null);
     }, [setUserLocation, addExploredZone, broadcastLocation, persistLocation]);
 
     /**
-     * Start watching with mock support
+     * Handle geolocation error with fallback
      */
-    const startWatching = useCallback(() => {
+    const handleGeolocationError = useCallback((error) => {
+        const errorMessage = getGeolocationErrorMessage(error);
+        setError(errorMessage);
+        console.warn('Geolocation error, using demo location:', errorMessage);
+        
+        // Auto-fallback to demo location
+        handlePositionUpdate(DEMO_LOCATION);
+    }, [handlePositionUpdate]);
+
+    /**
+     * Start watching with mobile optimizations
+     */
+    const startWatching = useCallback(async () => {
         // Clear any existing watchers
         if (watchIdRef.current !== null) {
             navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
         }
-        if (mockWatchIntervalRef.current !== null) {
-            clearInterval(mockWatchIntervalRef.current);
+        if (demoWatchIntervalRef.current !== null) {
+            clearInterval(demoWatchIntervalRef.current);
+            demoWatchIntervalRef.current = null;
         }
 
-        // Check if using mock location
-        const useMock = typeof window !== 'undefined' && localStorage.getItem('orb_mock_location') === 'true';
-        const isDevelopment = process.env.NODE_ENV === 'development';
+        setError(null);
 
-        if ((isDevelopment && useMock) || useMock) {
-            // Mock location watching
-            console.log('🧪 Starting mock location watcher');
-            handlePositionUpdate(MOCK_LOCATION);
+        // Check if using demo mode
+        const useDemo = typeof window !== 'undefined' && 
+            (localStorage.getItem('orb_demo_location') === 'true' || !isSecureContext);
+
+        if (useDemo) {
+            console.log('🧪 Starting demo location watcher');
+            handlePositionUpdate(DEMO_LOCATION);
             
-            mockWatchIntervalRef.current = setInterval(() => {
+            demoWatchIntervalRef.current = setInterval(() => {
                 handlePositionUpdate({
-                    ...MOCK_LOCATION,
+                    ...DEMO_LOCATION,
                     timestamp: Date.now()
                 });
-            }, 5000); // Update every 5 seconds
-        } else {
-            // Real geolocation watching
-            if (!navigator.geolocation) {
-                console.error('Geolocation is not supported');
-                return;
-            }
+            }, 5000);
+            return;
+        }
 
+        // Real geolocation watching
+        if (!navigator.geolocation) {
+            const msg = 'Geolocation is not supported';
+            setError(msg);
+            console.error(msg);
+            handlePositionUpdate(DEMO_LOCATION);
+            return;
+        }
+
+        try {
+            // First, get initial position
+            const initialPosition = await getGeolocation({
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 0
+            });
+            handlePositionUpdate(initialPosition);
+
+            // Then start watching
             watchIdRef.current = navigator.geolocation.watchPosition(
                 (position) => {
                     handlePositionUpdate({
                         coords: position.coords,
                         timestamp: position.timestamp,
-                        isMock: false
+                        isMock: false,
+                        isDemo: false
                     });
                 },
-                (error) => {
-                    console.warn('Geolocation error:', error.code, error.message);
-                },
+                handleGeolocationError,
                 {
                     enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 5000
+                    timeout: 15000,
+                    maximumAge: 10000
                 }
             );
+        } catch (error) {
+            handleGeolocationError(error);
         }
-    }, [handlePositionUpdate]);
+    }, [handlePositionUpdate, handleGeolocationError]);
 
     /**
      * Stop watching
@@ -236,18 +303,47 @@ export function useGeolocation() {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
         }
-        if (mockWatchIntervalRef.current !== null) {
-            clearInterval(mockWatchIntervalRef.current);
-            mockWatchIntervalRef.current = null;
+        if (demoWatchIntervalRef.current !== null) {
+            clearInterval(demoWatchIntervalRef.current);
+            demoWatchIntervalRef.current = null;
+        }
+    }, []);
+
+    /**
+     * Request location permission (mobile-friendly)
+     */
+    const requestPermission = useCallback(async () => {
+        if (!navigator.permissions) {
+            // iOS Safari doesn't support permissions API
+            return 'prompt';
+        }
+
+        try {
+            const result = await navigator.permissions.query({ name: 'geolocation' });
+            setPermissionState(result.state);
+            
+            result.onchange = () => {
+                setPermissionState(result.state);
+            };
+
+            return result.state;
+        } catch (error) {
+            console.warn('Permission check failed:', error);
+            return 'prompt';
         }
     }, []);
 
     /**
      * Get current position (one-time)
      */
-    const getCurrentPosition = useCallback(async () => {
-        return await getGeolocation();
+    const getCurrentPosition = useCallback(async (options = {}) => {
+        return await getGeolocation(options);
     }, []);
+
+    // Check permission on mount
+    useEffect(() => {
+        requestPermission();
+    }, [requestPermission]);
 
     // Setup Supabase Realtime channel
     useEffect(() => {
@@ -296,7 +392,12 @@ export function useGeolocation() {
         startWatching,
         stopWatching,
         getCurrentPosition,
-        isWatching: watchIdRef.current !== null || mockWatchIntervalRef.current !== null
+        requestPermission,
+        isWatching: watchIdRef.current !== null || demoWatchIntervalRef.current !== null,
+        error,
+        permissionState,
+        hasPermission: permissionState === 'granted',
+        isDenied: permissionState === 'denied'
     };
 }
 
@@ -324,21 +425,20 @@ export function isPointInCircle(pointLat, pointLng, centerLat, centerLng, radius
 }
 
 /**
- * Toggle mock location mode (for development)
+ * Toggle demo location mode
  */
-export function toggleMockLocation(enabled) {
+export function toggleDemoLocation(enabled) {
     if (typeof window !== 'undefined') {
-        localStorage.setItem('orb_mock_location', enabled ? 'true' : 'false');
-        console.log(`🧪 Mock location ${enabled ? 'enabled' : 'disabled'}`);
-        // Reload to apply changes
+        localStorage.setItem('orb_demo_location', enabled ? 'true' : 'false');
+        console.log(`🧪 Demo location ${enabled ? 'enabled' : 'disabled'}`);
         window.location.reload();
     }
 }
 
 /**
- * Check if mock location is enabled
+ * Check if demo location is enabled
  */
-export function isMockLocationEnabled() {
+export function isDemoLocationEnabled() {
     if (typeof window === 'undefined') return false;
-    return localStorage.getItem('orb_mock_location') === 'true';
+    return localStorage.getItem('orb_demo_location') === 'true' || !isSecureContext;
 }

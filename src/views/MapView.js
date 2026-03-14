@@ -26,9 +26,6 @@ import 'leaflet/dist/leaflet.css';
 // REUSABLE COMPONENTS
 // ============================================
 
-/**
- * MapControlButton - Reusable button component with glassmorphism style
- */
 function MapControlButton({ onClick, children, label, className = '', active = false }) {
     return (
         <button
@@ -42,9 +39,6 @@ function MapControlButton({ onClick, children, label, className = '', active = f
     );
 }
 
-/**
- * MapSearchBar - Search input with glassmorphism style
- */
 function MapSearchBar({ friends, onFriendSelect }) {
     const [query, setQuery] = useState('');
     const [isFocused, setIsFocused] = useState(false);
@@ -119,9 +113,6 @@ function MapSearchBar({ friends, onFriendSelect }) {
 // MAP MARKERS
 // ============================================
 
-/**
- * Custom pulse marker icon for current user
- */
 function createPulseIcon() {
     return L.divIcon({
         className: 'custom-pulse-marker',
@@ -136,9 +127,6 @@ function createPulseIcon() {
     });
 }
 
-/**
- * Friend marker icon with status indicator
- */
 function createFriendIcon(isOnline) {
     const statusColor = isOnline ? '#4ade80' : '#6b7280';
     
@@ -164,9 +152,6 @@ function createFriendIcon(isOnline) {
 // FOG OF WAR OVERLAY
 // ============================================
 
-/**
- * Fog of War Canvas Overlay - Zenly-style explored zones
- */
 class FogOfWarOverlay extends L.Layer {
     constructor(exploredZones, showFogOfWar, theme) {
         super();
@@ -217,22 +202,19 @@ class FogOfWarOverlay extends L.Layer {
 
         ctx.clearRect(0, 0, size.x, size.y);
 
-        // Fog color based on theme
         const fogColor = this.theme === 'dark' 
-            ? 'rgba(10, 10, 10, 0.85)'
-            : 'rgba(240, 240, 240, 0.75)';
+            ? 'rgba(10, 10, 10, 0.7)'
+            : 'rgba(240, 240, 240, 0.6)';
 
         ctx.fillStyle = fogColor;
         ctx.fillRect(0, 0, size.x, size.y);
 
-        // Clear fog for explored zones
         ctx.globalCompositeOperation = 'destination-out';
 
         this.exploredZones.forEach(zone => {
             const centerPoint = this._map.latLngToContainerPoint([zone.center.lat, zone.center.lng]);
             const radiusPixels = this._pixelsPerMeterAtLat(zone.center.lat) * zone.radius;
 
-            // Gradient for smooth edge transition
             const gradient = ctx.createRadialGradient(
                 centerPoint.x, centerPoint.y, radiusPixels * 0.7,
                 centerPoint.x, centerPoint.y, radiusPixels
@@ -283,6 +265,7 @@ function MapViewContent() {
     const friendMarkersRef = useRef(new Map());
     const fogOverlayRef = useRef(null);
     const initAttemptedRef = useRef(false);
+    const tileLayerRef = useRef(null);
 
     const user = useAtomValue(userAtom);
     const userLocation = useAtomValue(userLocationAtom);
@@ -298,6 +281,8 @@ function MapViewContent() {
     const [locationPermission, setLocationPermission] = useState('prompt');
     const [initError, setInitError] = useState(null);
     const [showStats, setShowStats] = useState(false);
+    const [tileError, setTileError] = useState(false);
+    const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
 
     // Load explored zones from localStorage
     useEffect(() => {
@@ -313,19 +298,38 @@ function MapViewContent() {
         }
     }, [setExploredZones]);
 
-    // Check location permission
+    // Check location permission with mobile support
     useEffect(() => {
-        if ('permissions' in navigator) {
-            navigator.permissions.query({ name: 'geolocation' })
-                .then(result => {
-                    setLocationPermission(result.state);
-                    result.onchange = () => setLocationPermission(result.state);
-                })
-                .catch(() => {});
+        if (!('permissions' in navigator)) {
+            // iOS Safari doesn't support permissions API
+            setLocationPermission('prompt');
+            return;
         }
+
+        navigator.permissions.query({ name: 'geolocation' })
+            .then(result => {
+                setLocationPermission(result.state);
+                result.onchange = () => setLocationPermission(result.state);
+            })
+            .catch(() => {
+                // Fallback for browsers without permissions API
+                setLocationPermission('prompt');
+            });
+
+        // Monitor online status
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
     }, []);
 
-    // Initialize map
+    // Initialize map with mobile optimizations
     useEffect(() => {
         if (typeof window === 'undefined') return;
         if (!mapContainerRef.current) return;
@@ -344,25 +348,36 @@ function MapViewContent() {
                 shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
             });
 
-            // Create map with default center
+            // Create map with mobile-optimized settings
             mapRef.current = L.map(mapContainerRef.current, {
                 zoomControl: false,
                 attributionControl: false,
                 zoomAnimation: true,
                 fadeAnimation: true,
                 markerZoomAnimation: true,
-                minZoom: 3,
-                maxZoom: 19,
+                minZoom: 2,
+                maxZoom: 18,
                 worldCopyJump: true,
                 center: [51.505, -0.09],
-                zoom: 13
+                zoom: 13,
+                preferCanvas: true, // Better mobile performance
+                zoomSnap: 0.5, // Smoother zoom on mobile
+                wheelDebounceTime: 150 // Prevent excessive zooming
             });
 
             setMapInstance(mapRef.current);
 
-            // Add controls
-            L.control.zoom({ position: 'bottomright' }).addTo(mapRef.current);
-            L.control.attribution({ position: 'bottomright', prefix: '' }).addTo(mapRef.current);
+            // Add zoom controls
+            L.control.zoom({ 
+                position: 'bottomright',
+                zoomInText: '+',
+                zoomOutText: '−'
+            }).addTo(mapRef.current);
+
+            L.control.attribution({ 
+                position: 'bottomright', 
+                prefix: '' 
+            }).addTo(mapRef.current);
 
             setMapLoaded(true);
 
@@ -380,34 +395,55 @@ function MapViewContent() {
         };
     }, [setMapInstance]);
 
-    // Update map tiles based on theme
+    // Update map tiles with LABELS (FIXED)
     useEffect(() => {
         if (!mapRef.current || !mapLoaded) return;
 
-        // Abstract CartoDB tiles - NO street details
+        // CartoDB tiles WITH LABELS for context
         const tileLayers = {
-            dark: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-            light: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
+            dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
         };
 
         const tileUrl = theme === 'dark' ? tileLayers.dark : tileLayers.light;
 
         // Remove existing tiles
-        mapRef.current.eachLayer(layer => {
-            if (layer instanceof L.TileLayer) {
-                mapRef.current.removeLayer(layer);
-            }
-        });
+        if (tileLayerRef.current) {
+            mapRef.current.removeLayer(tileLayerRef.current);
+        }
 
-        // Add new tiles
-        L.tileLayer(tileUrl, {
-            maxZoom: 19,
+        // Add new tiles with better mobile caching
+        tileLayerRef.current = L.tileLayer(tileUrl, {
+            maxZoom: 18,
+            minZoom: 2,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
             detectRetina: true,
             updateWhenIdle: true,
             updateWhenZooming: false,
-        }).addTo(mapRef.current);
+            keepBuffer: 2, // Keep tiles in buffer for smoother panning
+            maxNativeZoom: 18,
+            crossOrigin: true, // Enable CORS for service worker caching
+            errorTileUrl: '', // Don't show error tiles
+        });
+
+        tileLayerRef.current.on('tileerror', (error) => {
+            console.warn('Tile load error:', error.tile);
+            setTileError(true);
+        });
+
+        tileLayerRef.current.on('load', () => {
+            setTileError(false);
+        });
+
+        tileLayerRef.current.addTo(mapRef.current);
+
+        // Invalidate size after tiles load (fixes mobile display issues)
+        setTimeout(() => {
+            if (mapRef.current) {
+                mapRef.current.invalidateSize();
+            }
+        }, 100);
 
     }, [theme, mapLoaded]);
 
@@ -448,9 +484,10 @@ function MapViewContent() {
             zIndexOffset: 1000
         }).addTo(mapRef.current);
 
+        const locationLabel = userLocation.isMock ? '🧪 Demo Location' : 'You';
         userMarkerRef.current.bindPopup(`
             <div class="location-popup">
-                <strong>${userLocation.isMock ? '🧪 Mock Location' : 'Your Location'}</strong><br/>
+                <strong>${locationLabel}</strong><br/>
                 Accuracy: ${Math.round(userLocation.accuracy)}m
             </div>
         `);
@@ -508,12 +545,33 @@ function MapViewContent() {
     }, [friendLocations, formatLastSeen]);
 
     // Handlers
-    const handleLocateMe = useCallback(() => {
+    const handleLocateMe = useCallback(async () => {
         if (userLocation && mapRef.current) {
             mapRef.current.setView([userLocation.latitude, userLocation.longitude], 16, {
                 animate: true,
                 duration: 0.5
             });
+        } else {
+            // Request location if not available
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    });
+                });
+                
+                if (mapRef.current) {
+                    mapRef.current.setView(
+                        [position.coords.latitude, position.coords.longitude], 
+                        16, 
+                        { animate: true, duration: 0.5 }
+                    );
+                }
+            } catch (error) {
+                console.error('Failed to get location:', error);
+            }
         }
     }, [userLocation]);
 
@@ -535,10 +593,6 @@ function MapViewContent() {
     const handleProfileClick = useCallback(() => {
         setView('profile');
     }, [setView]);
-
-    const toggleSettings = useCallback(() => {
-        setMapSettings(prev => ({ ...prev, showSettings: !prev.showSettings }));
-    }, [setMapSettings]);
 
     const toggleLayer = useCallback(() => {
         setMapSettings(prev => ({ ...prev, layer: prev.layer === 'dark' ? 'light' : 'dark' }));
@@ -581,7 +635,7 @@ function MapViewContent() {
 
             {/* TOP RIGHT: Settings & Layer */}
             <div className="map-controls-top-right">
-                <MapControlButton onClick={toggleLayer} label="Toggle Layer">
+                <MapControlButton onClick={toggleLayer} label="Toggle Theme">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <line x1="2" y1="12" x2="22" y2="12"></line>
@@ -621,8 +675,6 @@ function MapViewContent() {
                 />
             </div>
 
-            {/* BOTTOM RIGHT: Zoom controls are handled by Leaflet */}
-
             {/* Stats Panel */}
             {showStats && (
                 <div className="map-stats-panel">
@@ -652,6 +704,24 @@ function MapViewContent() {
                 </div>
             )}
 
+            {/* Offline Warning */}
+            {!isOnline && (
+                <div className="connection-warning">
+                    <div className="warning-content">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="1" y1="1" x2="23" y2="23"></line>
+                            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+                            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+                            <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+                            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+                            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                            <line x1="12" y1="20" x2="12.01" y2="20"></line>
+                        </svg>
+                        <p>You're offline. Map will load when connection is restored.</p>
+                    </div>
+                </div>
+            )}
+
             {/* Location Permission Warning */}
             {locationPermission === 'denied' && (
                 <div className="location-permission-warning">
@@ -661,7 +731,14 @@ function MapViewContent() {
                             <line x1="12" y1="8" x2="12" y2="12"></line>
                             <line x1="12" y1="16" x2="12.01" y2="16"></line>
                         </svg>
-                        <p>Location access is disabled. Enable it in your browser settings.</p>
+                        <p><strong>Location Access Denied</strong></p>
+                        <p className="warning-subtext">To enable location sharing:</p>
+                        <ol className="warning-steps">
+                            <li>Tap the lock icon in your browser</li>
+                            <li>Enable "Location" permission</li>
+                            <li>Refresh the page</li>
+                        </ol>
+                        <p className="warning-subtext">Or use demo location in settings.</p>
                     </div>
                 </div>
             )}
@@ -676,6 +753,12 @@ function MapViewContent() {
                             <line x1="12" y1="16" x2="12.01" y2="16"></line>
                         </svg>
                         <p>Map failed to load: {initError}</p>
+                        <button 
+                            className="retry-button"
+                            onClick={() => window.location.reload()}
+                        >
+                            Reload Page
+                        </button>
                     </div>
                 </div>
             )}
@@ -685,6 +768,7 @@ function MapViewContent() {
                 <div className="map-loading">
                     <div className="loading-spinner"></div>
                     <p>Loading map...</p>
+                    {!isOnline && <p className="offline-note">Offline mode active</p>}
                 </div>
             )}
         </div>
