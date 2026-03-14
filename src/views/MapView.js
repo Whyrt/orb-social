@@ -1,7 +1,7 @@
 // src/views/MapView.js
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import L from 'leaflet';
 
@@ -36,6 +36,243 @@ function MapControlButton({ onClick, children, label, className = '', active = f
         >
             {children}
         </button>
+    );
+}
+
+/**
+ * Create enhanced pulse marker icon for user location
+ * Includes pulsing ring, accuracy circle, and label
+ */
+function createUserMarkerIcon(isDark = true) {
+    const accentColor = isDark ? '#ffffff' : '#1a1a1a';
+    
+    return L.divIcon({
+        className: 'enhanced-user-marker',
+        html: `
+            <div class="user-marker-container">
+                <div class="accuracy-circle"></div>
+                <div class="pulse-ring-outer"></div>
+                <div class="pulse-ring-inner"></div>
+                <div class="user-dot" style="background: ${accentColor}"></div>
+                <div class="user-label" style="color: ${accentColor}">You</div>
+            </div>
+        `,
+        iconSize: [60, 80],
+        iconAnchor: [30, 40],
+        popupAnchor: [0, -45],
+    });
+}
+
+/**
+ * Create friend marker icon with online status
+ */
+function createFriendIcon(isOnline, isDark = true) {
+    const statusColor = isOnline ? '#4ade80' : '#6b7280';
+    const bgColor = isDark ? 'rgba(20, 20, 20, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+    const borderColor = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+
+    return L.divIcon({
+        className: 'enhanced-friend-marker',
+        html: `
+            <div class="friend-marker-container">
+                <div class="friend-avatar" style="border-color: ${statusColor}; background: ${bgColor}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </div>
+                <div class="friend-status-dot" style="background-color: ${statusColor}; border-color: ${borderColor}"></div>
+            </div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+        popupAnchor: [0, -25],
+    });
+}
+
+/**
+ * Mini Map Preview Component for MenuView
+ * Shows a small interactive map with user location and nearby friends
+ */
+export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, className = '' }) {
+    const mapRef = useRef(null);
+    const mapContainerRef = useRef(null);
+    const userLocation = useAtomValue(userLocationAtom);
+    const friendLocations = useAtomValue(friendLocationsAtom);
+    const theme = useAtomValue(themeAtom);
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    // Initialize mini map
+    useEffect(() => {
+        // Check for window (SSR safety)
+        if (typeof window === 'undefined') return;
+        if (!mapContainerRef.current || mapRef.current) return;
+
+        try {
+            // Fix Leaflet icons
+            if (L.Icon.Default && L.Icon.Default.prototype._getIconUrl) {
+                delete L.Icon.Default.prototype._getIconUrl;
+            }
+            L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            });
+
+            // Create mini map with restricted controls
+            mapRef.current = L.map(mapContainerRef.current, {
+                zoomControl: false,
+                attributionControl: false,
+                zoomAnimation: true,
+                fadeAnimation: true,
+                minZoom: 10,
+                maxZoom: 16,
+                worldCopyJump: true,
+                center: userLocation ? [userLocation.latitude, userLocation.longitude] : [51.505, -0.09],
+                zoom: userLocation ? 14 : 13,
+                preferCanvas: true,
+                scrollWheelZoom: false,
+                doubleClickZoom: false,
+                touchZoom: false,
+                dragging: false,
+                zoomSnap: 0,
+            });
+
+            // Add tiles
+            const isDark = theme === 'dark' || theme === 'system';
+            const tileUrl = isDark 
+                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+            L.tileLayer(tileUrl, {
+                maxZoom: 16,
+                minZoom: 10,
+                attribution: '',
+                subdomains: 'abcd',
+                detectRetina: true,
+                updateWhenIdle: true,
+                keepBuffer: 2,
+                maxNativeZoom: 18,
+                crossOrigin: true,
+            }).addTo(mapRef.current);
+
+            setIsInitialized(true);
+
+        } catch (error) {
+            console.error('Mini map init error:', error);
+        }
+
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
+        };
+    }, []);
+
+    // Update tiles on theme change
+    useEffect(() => {
+        if (!mapRef.current) return;
+
+        const isDark = theme === 'dark' || theme === 'system';
+        const tileUrl = isDark 
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+        // Remove existing tiles and add new ones
+        mapRef.current.eachLayer((layer) => {
+            if (layer instanceof L.TileLayer) {
+                mapRef.current.removeLayer(layer);
+            }
+        });
+
+        L.tileLayer(tileUrl, {
+            maxZoom: 16,
+            minZoom: 10,
+            attribution: '',
+            subdomains: 'abcd',
+            detectRetina: true,
+            updateWhenIdle: true,
+            keepBuffer: 2,
+            maxNativeZoom: 18,
+            crossOrigin: true,
+        }).addTo(mapRef.current);
+    }, [theme]);
+
+    // Update user marker
+    useEffect(() => {
+        if (!mapRef.current || !isInitialized) return;
+
+        // Clear existing markers
+        mapRef.current.eachLayer((layer) => {
+            if (layer instanceof L.Marker || layer instanceof L.Circle) {
+                mapRef.current.removeLayer(layer);
+            }
+        });
+
+        const center = userLocation 
+            ? [userLocation.latitude, userLocation.longitude] 
+            : [51.505, -0.09];
+        
+        mapRef.current.setView(center, userLocation ? 14 : 13, { animate: true });
+
+        if (userLocation) {
+            // Add user marker
+            const userIcon = createUserMarkerIcon(theme === 'dark');
+            L.marker([userLocation.latitude, userLocation.longitude], {
+                icon: userIcon,
+                zIndexOffset: 1000,
+            }).addTo(mapRef.current);
+
+            // Add accuracy circle
+            L.circle([userLocation.latitude, userLocation.longitude], {
+                radius: userLocation.accuracy || 20,
+                color: theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
+                fillColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                fillOpacity: 0.3,
+                weight: 1,
+            }).addTo(mapRef.current);
+        }
+
+        // Add friend markers
+        const isDark = theme === 'dark' || theme === 'system';
+        friendLocations.slice(0, 5).forEach((friend) => {
+            if (friend.latitude && friend.longitude) {
+                const friendIcon = createFriendIcon(friend.isOnline, isDark);
+                L.marker([friend.latitude, friend.longitude], {
+                    icon: friendIcon,
+                    zIndexOffset: 900,
+                }).addTo(mapRef.current);
+            }
+        });
+
+    }, [userLocation, friendLocations, isInitialized, theme]);
+
+    // Invalidate size when container changes
+    useEffect(() => {
+        if (mapRef.current && isInitialized) {
+            setTimeout(() => {
+                mapRef.current.invalidateSize({ animate: false });
+            }, 100);
+        }
+    }, [width, height, isInitialized]);
+
+    return (
+        <div className={`mini-map-preview ${className}`} style={{ width, height }}>
+            <div 
+                ref={mapContainerRef} 
+                className="mini-map-container"
+                onClick={onOpenMap}
+                style={{ width: '100%', height: '100%', cursor: 'pointer' }}
+            />
+            <div className="mini-map-overlay" onClick={onOpenMap}>
+                <span className="mini-map-label">Open Live Map</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+            </div>
+        </div>
     );
 }
 
@@ -110,43 +347,9 @@ function MapSearchBar({ friends, onFriendSelect }) {
 }
 
 // ============================================
-// MAP MARKERS
+// MAP MARKERS (Legacy - using enhanced versions above)
 // ============================================
-
-function createPulseIcon() {
-    return L.divIcon({
-        className: 'custom-pulse-marker',
-        html: `
-            <div class="pulse-marker-container">
-                <div class="pulse-ring"></div>
-                <div class="pulse-dot"></div>
-            </div>
-        `,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20],
-    });
-}
-
-function createFriendIcon(isOnline) {
-    const statusColor = isOnline ? '#4ade80' : '#6b7280';
-    
-    return L.divIcon({
-        className: 'custom-friend-marker',
-        html: `
-            <div class="friend-marker-container">
-                <div class="friend-avatar" style="border-color: ${statusColor}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                </div>
-                <div className="friend-status-dot" style="background-color: ${statusColor}"></div>
-            </div>
-        `,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-    });
-}
+// Note: Using createUserMarkerIcon and createFriendIcon from above
 
 // ============================================
 // FOG OF WAR OVERLAY
@@ -356,27 +559,28 @@ function MapViewContent() {
                 fadeAnimation: true,
                 markerZoomAnimation: true,
                 minZoom: 2,
-                maxZoom: 18,
+                maxZoom: 19, // Extended max zoom for better detail
                 worldCopyJump: true,
                 center: [51.505, -0.09],
                 zoom: 13,
                 preferCanvas: true, // Better mobile performance
                 zoomSnap: 0.5, // Smoother zoom on mobile
-                wheelDebounceTime: 150 // Prevent excessive zooming
+                wheelDebounceTime: 150, // Prevent excessive zooming
+                zoomDelta: 0.5, // Finer zoom steps
             });
 
             setMapInstance(mapRef.current);
 
-            // Add zoom controls
-            L.control.zoom({ 
+            // Add zoom controls in bottom-right position
+            L.control.zoom({
                 position: 'bottomright',
                 zoomInText: '+',
                 zoomOutText: '−'
             }).addTo(mapRef.current);
 
-            L.control.attribution({ 
-                position: 'bottomright', 
-                prefix: '' 
+            L.control.attribution({
+                position: 'bottomright',
+                prefix: ''
             }).addTo(mapRef.current);
 
             setMapLoaded(true);
@@ -395,7 +599,7 @@ function MapViewContent() {
         };
     }, [setMapInstance]);
 
-    // Update map tiles with LABELS (FIXED)
+    // Update map tiles with improved caching and max zoom handling
     useEffect(() => {
         if (!mapRef.current || !mapLoaded) return;
 
@@ -412,19 +616,21 @@ function MapViewContent() {
             mapRef.current.removeLayer(tileLayerRef.current);
         }
 
-        // Add new tiles with better mobile caching
+        // Add new tiles with enhanced mobile caching and zoom handling
         tileLayerRef.current = L.tileLayer(tileUrl, {
-            maxZoom: 18,
+            maxZoom: 19, // Support higher zoom levels
             minZoom: 2,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
             detectRetina: true,
-            updateWhenIdle: true,
-            updateWhenZooming: false,
-            keepBuffer: 2, // Keep tiles in buffer for smoother panning
-            maxNativeZoom: 18,
+            updateWhenIdle: false, // Keep updating tiles during pan
+            updateWhenZooming: true, // Show tiles during zoom
+            keepBuffer: 4, // Keep more tiles in buffer for smoother panning
+            maxNativeZoom: 18, // Native tile resolution
             crossOrigin: true, // Enable CORS for service worker caching
             errorTileUrl: '', // Don't show error tiles
+            tileSize: 256,
+            zoomOffset: 0,
         });
 
         tileLayerRef.current.on('tileerror', (error) => {
@@ -469,18 +675,20 @@ function MapViewContent() {
         fogOverlayRef.current.setTheme(theme);
     }, [exploredZones, mapSettings.showFogOfWar, theme]);
 
-    // Update user marker
+    // Update user marker with enhanced pulsing animation
     useEffect(() => {
         if (!mapRef.current || !userLocation) return;
 
         const { latitude, longitude } = userLocation;
+        const isDark = theme === 'dark' || theme === 'system';
 
         if (userMarkerRef.current) {
             mapRef.current.removeLayer(userMarkerRef.current);
         }
 
+        // Create enhanced user marker with pulse animation
         userMarkerRef.current = L.marker([latitude, longitude], {
-            icon: createPulseIcon(),
+            icon: createUserMarkerIcon(isDark),
             zIndexOffset: 1000
         }).addTo(mapRef.current);
 
@@ -488,7 +696,7 @@ function MapViewContent() {
         userMarkerRef.current.bindPopup(`
             <div class="location-popup">
                 <strong>${locationLabel}</strong><br/>
-                Accuracy: ${Math.round(userLocation.accuracy)}m
+                <small>Accuracy: ${Math.round(userLocation.accuracy)}m</small>
             </div>
         `);
 
@@ -499,13 +707,14 @@ function MapViewContent() {
             });
         }
 
-    }, [userLocation, mapSettings.followUser]);
+    }, [userLocation, mapSettings.followUser, theme]);
 
-    // Update friend markers
+    // Update friend markers with enhanced icons
     useEffect(() => {
         if (!mapRef.current) return;
 
         const currentFriendIds = new Set();
+        const isDark = theme === 'dark' || theme === 'system';
 
         friendLocations.forEach(friend => {
             if (!friend.latitude || !friend.longitude) return;
@@ -517,12 +726,12 @@ function MapViewContent() {
             }
 
             const marker = L.marker([friend.latitude, friend.longitude], {
-                icon: createFriendIcon(friend.isOnline),
+                icon: createFriendIcon(friend.isOnline, isDark),
                 zIndexOffset: 900
             }).addTo(mapRef.current);
 
-            const lastSeenText = friend.isOnline 
-                ? 'Online now' 
+            const lastSeenText = friend.isOnline
+                ? 'Online now'
                 : `Last seen: ${formatLastSeen(friend.last_seen)}`;
 
             marker.bindPopup(`
@@ -542,7 +751,7 @@ function MapViewContent() {
             }
         });
 
-    }, [friendLocations, formatLastSeen]);
+    }, [friendLocations, formatLastSeen, theme]);
 
     // Handlers
     const handleLocateMe = useCallback(async () => {
@@ -617,15 +826,15 @@ function MapViewContent() {
     return (
         <div className="map-view-container">
             {/* Map Container */}
-            <div 
-                ref={mapContainerRef} 
+            <div
+                ref={mapContainerRef}
                 className="map-container"
                 style={{ width: '100%', height: '100%', minHeight: '100vh' }}
             />
 
-            {/* TOP LEFT: Profile Avatar */}
+            {/* TOP LEFT: Profile Avatar (40px) */}
             <div className="map-controls-top-left">
-                <MapControlButton onClick={handleProfileClick} label="Profile">
+                <MapControlButton onClick={handleProfileClick} label="Profile" className="control-profile">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                         <circle cx="12" cy="7" r="4"></circle>
@@ -633,46 +842,53 @@ function MapViewContent() {
                 </MapControlButton>
             </div>
 
-            {/* TOP RIGHT: Settings & Layer */}
+            {/* TOP RIGHT: Theme Toggle + Settings (vertical stack, 40px each) */}
             <div className="map-controls-top-right">
-                <MapControlButton onClick={toggleLayer} label="Toggle Theme">
+                <MapControlButton onClick={toggleLayer} label="Toggle Theme" className="control-theme">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <line x1="2" y1="12" x2="22" y2="12"></line>
                         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                     </svg>
                 </MapControlButton>
-                <MapControlButton onClick={handleLocateMe} label="Locate Me">
+                <MapControlButton onClick={toggleFogOfWar} label="Fog of War" active={mapSettings.showFogOfWar} className="control-fog">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
                     </svg>
                 </MapControlButton>
             </div>
 
-            {/* BOTTOM LEFT: Stats & Friends */}
+            {/* BOTTOM LEFT: Stats cards (explored km², friends nearby) */}
             <div className="map-controls-bottom-left">
-                <MapControlButton onClick={toggleStats} label="Stats" active={showStats}>
+                <MapControlButton onClick={toggleStats} label="Stats" active={showStats} className="control-stats">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
                     </svg>
                 </MapControlButton>
-                <MapControlButton label="Friends">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="9" cy="7" r="4"></circle>
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                    </svg>
-                </MapControlButton>
             </div>
 
-            {/* BOTTOM CENTER: Search Bar */}
+            {/* BOTTOM CENTER: Search bar (full width minus padding) */}
             <div className="map-controls-bottom-center">
-                <MapSearchBar 
+                <MapSearchBar
                     friends={friendLocations.map(fl => fl.user).filter(Boolean)}
                     onFriendSelect={handleFriendSelect}
                 />
+            </div>
+
+            {/* BOTTOM RIGHT: Locate me button + Zoom controls (vertical stack) */}
+            <div className="map-controls-bottom-right">
+                <MapControlButton onClick={handleLocateMe} label="Locate Me" className="control-locate">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                    </svg>
+                </MapControlButton>
+                <MapControlButton onClick={toggleFollowUser} label="Follow Me" active={mapSettings.followUser} className="control-follow">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </MapControlButton>
             </div>
 
             {/* Stats Panel */}

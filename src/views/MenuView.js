@@ -1,8 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { userAtom, globalPlayerAtom, viewAtom } from '@/atoms';
 import { useActions } from '@/lib/actions';
 import { useDevice } from '@/hooks/useDevice';
+
+// Dynamic import for MiniMapPreview to avoid SSR issues with Leaflet
+const MiniMapPreview = React.lazy(() => 
+    import('@/views/MapView').then(module => ({ default: module.MiniMapPreview }))
+);
 
 /**
  * MenuView - Main Dashboard
@@ -77,25 +82,43 @@ export default function MenuView() {
             {/* CENTER SCREEN - INTENTIONALLY EMPTY for 3D Neural Sphere */}
             {/* The center is now completely free for the background visualization */}
 
-            {/* Floating Map Button - Above Bottom Bar */}
-            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[1500] pointer-events-auto">
-                <button
-                    onClick={handleOpenMap}
-                    className="map-access-button terminal-border"
-                    style={{
-                        backgroundColor: 'var(--background-elevated)',
-                        color: 'var(--foreground)',
-                        backdropFilter: 'blur(10px)'
-                    }}
-                    aria-label="Open map"
-                >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter">
-                        <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
-                        <line x1="9" y1="3" x2="9" y2="18"/>
-                        <line x1="15" y1="6" x2="15" y2="21"/>
-                    </svg>
-                    <span className="map-button-label">Map</span>
-                </button>
+            {/* Live Map Preview Card - Above Bottom Bar */}
+            <div className="absolute bottom-20 left-0 right-0 z-[1500] pointer-events-auto px-4">
+                <div className="map-preview-card terminal-border" 
+                     style={{
+                         backgroundColor: 'var(--background-elevated)',
+                         backdropFilter: 'blur(10px)',
+                         borderRadius: '16px',
+                         overflow: 'hidden'
+                     }}>
+                    {/* Card header */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b" 
+                         style={{ borderColor: 'var(--border-color)' }}>
+                        <div className="flex items-center gap-2">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--foreground)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+                                <line x1="9" y1="3" x2="9" y2="18"/>
+                                <line x1="15" y1="6" x2="15" y2="21"/>
+                            </svg>
+                            <span className="text-xs font-mono" style={{ color: 'var(--foreground)' }}>Live Map</span>
+                        </div>
+                        <span className="text-[9px] uppercase tracking-widest" style={{ color: 'var(--foreground-dim)' }}>
+                            See where your friends are
+                        </span>
+                    </div>
+                    
+                    {/* Mini map preview - Client side only */}
+                    <Suspense fallback={
+                        <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-muted)', fontSize: '12px' }}>
+                            Loading map...
+                        </div>
+                    }>
+                        <MiniMapPreview 
+                            height={200} 
+                            onOpenMap={handleOpenMap}
+                        />
+                    </Suspense>
+                </div>
             </div>
 
             {/* Note: Bottom navigation bar is handled by BottomBar component in Orb.js */}

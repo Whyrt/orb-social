@@ -126,55 +126,81 @@
 }
 
 /* ============================================
-   CONTROL POSITIONING
+   CONTROL POSITIONING - ERGONOMIC LAYOUT
+   Safe areas for mobile, comfortable one-handed use
    ============================================ */
 
+/* TOP LEFT: Profile avatar */
 .map-controls-top-left {
     position: absolute;
-    top: 12px;
-    left: 12px;
-    z-index: 500;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    z-index: 1000;
 }
 
+/* TOP RIGHT: Theme toggle + Settings (vertical stack) */
 .map-controls-top-right {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 500;
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    z-index: 1000;
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
+/* BOTTOM LEFT: Stats cards */
 .map-controls-bottom-left {
     position: absolute;
-    bottom: 100px;
-    left: 12px;
-    z-index: 500;
+    bottom: max(100px, calc(24px + env(safe-area-inset-bottom)));
+    left: max(12px, env(safe-area-inset-left));
+    z-index: 1000;
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
+/* BOTTOM CENTER: Search bar (full width minus padding) */
 .map-controls-bottom-center {
     position: absolute;
-    bottom: 24px;
+    bottom: max(24px, calc(24px + env(safe-area-inset-bottom)));
     left: 50%;
     transform: translateX(-50%);
-    z-index: 500;
+    z-index: 1000;
     width: calc(100% - 48px);
-    max-width: 400px;
+    max-width: 500px;
     padding: 0 8px;
 }
 
+/* BOTTOM RIGHT: Locate me + Follow me (vertical stack) */
 .map-controls-bottom-right {
     position: absolute;
-    bottom: 24px;
-    right: 12px;
-    z-index: 500;
+    bottom: max(24px, calc(80px + env(safe-area-inset-bottom)));
+    right: max(12px, env(safe-area-inset-right));
+    z-index: 1000;
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+/* Control button size variants */
+.map-control-btn.control-profile,
+.map-control-btn.control-theme,
+.map-control-btn.control-fog,
+.map-control-btn.control-stats,
+.map-control-btn.control-locate,
+.map-control-btn.control-follow {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+}
+
+.map-control-btn svg {
+    width: 20px;
+    height: 20px;
+    strokeWidth: 1.5;
+    strokeLinecap: round;
+    strokeLinejoin: round;
 }
 
 /* ============================================
@@ -378,10 +404,141 @@
 }
 
 /* ============================================
-   CUSTOM MARKERS
+   CUSTOM MARKERS - ENHANCED
    ============================================ */
 
-/* Pulse Marker (Current User) */
+/* Enhanced User Marker (Pulsing with accuracy circle) */
+.enhanced-user-marker .user-marker-container {
+    position: relative;
+    width: 60px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+/* Accuracy circle (subtle GPS precision indicator) */
+.enhanced-user-marker .accuracy-circle {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid var(--accent-dim);
+    opacity: 0.3;
+    transform: translate(-50%, -50%);
+    top: 50%;
+    left: 50%;
+}
+
+/* Outer pulse ring */
+.enhanced-user-marker .pulse-ring-outer {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0;
+    animation: pulse-ring-outer 2s ease-out infinite;
+}
+
+/* Inner pulse ring */
+.enhanced-user-marker .pulse-ring-inner {
+    position: absolute;
+    width: 70%;
+    height: 70%;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0;
+    animation: pulse-ring-inner 1.5s ease-out infinite 0.3s;
+}
+
+/* Center dot */
+.enhanced-user-marker .user-dot {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 3px solid var(--background);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    z-index: 3;
+}
+
+/* User label */
+.enhanced-user-marker .user-label {
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    z-index: 4;
+}
+
+@keyframes pulse-ring-outer {
+    0% {
+        transform: scale(0.3);
+        opacity: 0.5;
+    }
+    100% {
+        transform: scale(1.8);
+        opacity: 0;
+    }
+}
+
+@keyframes pulse-ring-inner {
+    0% {
+        transform: scale(0.5);
+        opacity: 0.6;
+    }
+    100% {
+        transform: scale(1.4);
+        opacity: 0;
+    }
+}
+
+/* Enhanced Friend Marker */
+.enhanced-friend-marker .friend-marker-container {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.enhanced-friend-marker .friend-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2.5px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.enhanced-friend-marker:hover .friend-avatar {
+    transform: scale(1.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.enhanced-friend-marker .friend-status-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--background);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Legacy pulse marker (keep for backward compatibility) */
 .custom-pulse-marker .pulse-marker-container {
     position: relative;
     width: 40px;
@@ -423,7 +580,7 @@
     }
 }
 
-/* Friend Marker */
+/* Legacy friend marker (keep for backward compatibility) */
 .custom-friend-marker .friend-marker-container {
     position: relative;
     width: 36px;
@@ -460,6 +617,59 @@
     border-radius: 50%;
     border: 2px solid var(--background);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   MINI MAP PREVIEW (for MenuView)
+   ============================================ */
+
+.mini-map-preview {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--background-elevated);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.mini-map-preview:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.mini-map-container {
+    width: 100%;
+    height: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.mini-map-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 16px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.mini-map-label {
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 600;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.mini-map-overlay svg {
+    color: var(--foreground);
+    opacity: 0.9;
 }
 
 /* ============================================
@@ -720,36 +930,42 @@
 /* Mobile optimizations */
 @media (max-width: 767px) {
     .map-control-btn {
-        width: 44px;
-        height: 44px;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
     }
 
     .map-control-btn svg {
-        width: 20px;
-        height: 20px;
+        width: 22px;
+        height: 22px;
     }
 
     .map-controls-top-left,
     .map-controls-top-right {
-        top: env(safe-area-inset-top, 12px);
+        top: max(16px, env(safe-area-inset-top));
     }
 
     .map-controls-top-left {
-        left: env(safe-area-inset-left, 12px);
+        left: max(16px, env(safe-area-inset-left));
     }
 
     .map-controls-top-right {
-        right: env(safe-area-inset-right, 12px);
+        right: max(16px, env(safe-area-inset-right));
     }
 
     .map-controls-bottom-left {
-        bottom: calc(100px + env(safe-area-inset-bottom, 0px));
-        left: env(safe-area-inset-left, 12px);
+        bottom: max(120px, calc(24px + env(safe-area-inset-bottom)));
+        left: max(16px, env(safe-area-inset-left));
     }
 
     .map-controls-bottom-center {
-        bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-        width: calc(100% - 48px);
+        bottom: max(24px, calc(24px + env(safe-area-inset-bottom)));
+        width: calc(100% - 64px);
+    }
+
+    .map-controls-bottom-right {
+        bottom: max(24px, calc(80px + env(safe-area-inset-bottom)));
+        right: max(16px, env(safe-area-inset-right));
     }
 
     .map-search-container {
@@ -780,6 +996,15 @@
 
     .warning-content {
         padding: 20px;
+    }
+
+    /* Mini map adjustments for mobile */
+    .mini-map-preview {
+        border-radius: 12px;
+    }
+
+    .mini-map-label {
+        font-size: 12px;
     }
 }
 
@@ -848,4 +1073,28 @@
 .map-search-clear:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+}
+
+/* ============================================
+   MAP PREVIEW CARD (MenuView)
+   ============================================ */
+
+.map-preview-card {
+    background: var(--background-elevated);
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.map-preview-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.map-preview-card .border-b {
+    border-bottom: 1px solid var(--border-color);
 }
