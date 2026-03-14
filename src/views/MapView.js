@@ -1,0 +1,696 @@
+// src/views/MapView.js
+"use client";
+
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useAtomValue, useSetAtom, useAtom } from 'jotai';
+import L from 'leaflet';
+
+import {
+    userAtom,
+    userLocationAtom,
+    friendLocationsAtom,
+    exploredZonesAtom,
+    mapSettingsAtom,
+    mapInstanceAtom,
+    viewAtom,
+    themeAtom
+} from '@/atoms';
+import { useGeolocation, calculateDistance, isPointInCircle } from '@/hooks/useGeolocation';
+import { useFriendLocations } from '@/hooks/useFriendLocations';
+import { useActions } from '@/lib/actions';
+
+// Import Leaflet CSS
+import 'leaflet/dist/leaflet.css';
+
+// ============================================
+// REUSABLE COMPONENTS
+// ============================================
+
+/**
+ * MapControlButton - Reusable button component with glassmorphism style
+ */
+function MapControlButton({ onClick, children, label, className = '', active = false }) {
+    return (
+        <button
+            className={`map-control-btn ${active ? 'active' : ''} ${className}`}
+            onClick={onClick}
+            aria-label={label}
+            title={label}
+        >
+            {children}
+        </button>
+    );
+}
+
+/**
+ * MapSearchBar - Search input with glassmorphism style
+ */
+function MapSearchBar({ friends, onFriendSelect }) {
+    const [query, setQuery] = useState('');
+    const [isFocused, setIsFocused] = useState(false);
+
+    const filteredFriends = friends.filter(friend => {
+        if (!query) return false;
+        const name = friend.username?.toLowerCase() || '';
+        return name.includes(query.toLowerCase());
+    });
+
+    return (
+        <div className={`map-search-container ${isFocused ? 'focused' : ''}`}>
+            <div className="map-search-wrapper">
+                <svg className="map-search-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                    type="text"
+                    className="map-search"
+                    placeholder="Search friends..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+                />
+                {query && (
+                    <button
+                        className="map-search-clear"
+                        onClick={() => setQuery('')}
+                        aria-label="Clear search"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                )}
+            </div>
+
+            {isFocused && query && (
+                <div className="map-search-results">
+                    {filteredFriends.length > 0 ? (
+                        filteredFriends.map(friend => (
+                            <button
+                                key={friend.id}
+                                className="map-search-result-item"
+                                onClick={() => {
+                                    onFriendSelect(friend);
+                                    setQuery('');
+                                }}
+                            >
+                                <div className="result-avatar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="12" cy="7" r="4"></circle>
+                                    </svg>
+                                </div>
+                                <span className="result-name">{friend.username || 'Friend'}</span>
+                            </button>
+                        ))
+                    ) : (
+                        <div className="map-search-no-results">No friends found</div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ============================================
+// MAP MARKERS
+// ============================================
+
+/**
+ * Custom pulse marker icon for current user
+ */
+function createPulseIcon() {
+    return L.divIcon({
+        className: 'custom-pulse-marker',
+        html: `
+            <div class="pulse-marker-container">
+                <div class="pulse-ring"></div>
+                <div class="pulse-dot"></div>
+            </div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+    });
+}
+
+/**
+ * Friend marker icon with status indicator
+ */
+function createFriendIcon(isOnline) {
+    const statusColor = isOnline ? '#4ade80' : '#6b7280';
+    
+    return L.divIcon({
+        className: 'custom-friend-marker',
+        html: `
+            <div class="friend-marker-container">
+                <div class="friend-avatar" style="border-color: ${statusColor}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </div>
+                <div className="friend-status-dot" style="background-color: ${statusColor}"></div>
+            </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+    });
+}
+
+// ============================================
+// FOG OF WAR OVERLAY
+// ============================================
+
+/**
+ * Fog of War Canvas Overlay - Zenly-style explored zones
+ */
+class FogOfWarOverlay extends L.Layer {
+    constructor(exploredZones, showFogOfWar, theme) {
+        super();
+        this.exploredZones = exploredZones;
+        this.showFogOfWar = showFogOfWar;
+        this.theme = theme;
+    }
+
+    onAdd(map) {
+        this._map = map;
+        this._canvas = L.DomUtil.create('canvas', 'leaflet-fog-overlay');
+        this._updateCanvasSize();
+
+        map.getPanes().overlayPane.appendChild(this._canvas);
+        map.on('moveend zoomend', this._redraw, this);
+        this._redraw();
+
+        return this._canvas;
+    }
+
+    onRemove(map) {
+        map.getPanes().overlayPane.removeChild(this._canvas);
+        map.off('moveend zoomend', this._redraw, this);
+    }
+
+    _updateCanvasSize() {
+        const size = this._map.getSize();
+        this._canvas.width = size.x;
+        this._canvas.height = size.y;
+        this._canvas.style.position = 'absolute';
+        this._canvas.style.top = '0';
+        this._canvas.style.left = '0';
+        this._canvas.style.pointerEvents = 'none';
+        this._canvas.style.zIndex = '400';
+    }
+
+    _redraw() {
+        if (!this._map || !this.showFogOfWar) {
+            this._canvas.style.display = 'none';
+            return;
+        }
+
+        this._canvas.style.display = 'block';
+        this._updateCanvasSize();
+
+        const ctx = this._canvas.getContext('2d');
+        const size = this._map.getSize();
+
+        ctx.clearRect(0, 0, size.x, size.y);
+
+        // Fog color based on theme
+        const fogColor = this.theme === 'dark' 
+            ? 'rgba(10, 10, 10, 0.85)'
+            : 'rgba(240, 240, 240, 0.75)';
+
+        ctx.fillStyle = fogColor;
+        ctx.fillRect(0, 0, size.x, size.y);
+
+        // Clear fog for explored zones
+        ctx.globalCompositeOperation = 'destination-out';
+
+        this.exploredZones.forEach(zone => {
+            const centerPoint = this._map.latLngToContainerPoint([zone.center.lat, zone.center.lng]);
+            const radiusPixels = this._pixelsPerMeterAtLat(zone.center.lat) * zone.radius;
+
+            // Gradient for smooth edge transition
+            const gradient = ctx.createRadialGradient(
+                centerPoint.x, centerPoint.y, radiusPixels * 0.7,
+                centerPoint.x, centerPoint.y, radiusPixels
+            );
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+            ctx.beginPath();
+            ctx.arc(centerPoint.x, centerPoint.y, radiusPixels, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        });
+
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    _pixelsPerMeterAtLat(lat) {
+        const earthCircumference = 40075017;
+        const latRad = lat * Math.PI / 180;
+        const metersPerPixel = (earthCircumference * Math.cos(latRad)) / 256;
+        return 1 / metersPerPixel;
+    }
+
+    setExploredZones(zones) {
+        this.exploredZones = zones;
+        this._redraw();
+    }
+
+    setShowFogOfWar(show) {
+        this.showFogOfWar = show;
+        this._redraw();
+    }
+
+    setTheme(theme) {
+        this.theme = theme;
+        this._redraw();
+    }
+}
+
+// ============================================
+// MAIN MAP COMPONENT
+// ============================================
+
+function MapViewContent() {
+    const mapContainerRef = useRef(null);
+    const mapRef = useRef(null);
+    const userMarkerRef = useRef(null);
+    const friendMarkersRef = useRef(new Map());
+    const fogOverlayRef = useRef(null);
+    const initAttemptedRef = useRef(false);
+
+    const user = useAtomValue(userAtom);
+    const userLocation = useAtomValue(userLocationAtom);
+    const friendLocations = useAtomValue(friendLocationsAtom);
+    const [exploredZones, setExploredZones] = useAtom(exploredZonesAtom);
+    const [mapSettings, setMapSettings] = useAtom(mapSettingsAtom);
+    const setMapInstance = useSetAtom(mapInstanceAtom);
+    const theme = useAtomValue(themeAtom);
+    const setView = useSetAtom(viewAtom);
+
+    const { formatLastSeen } = useFriendLocations();
+    const [mapLoaded, setMapLoaded] = useState(false);
+    const [locationPermission, setLocationPermission] = useState('prompt');
+    const [initError, setInitError] = useState(null);
+    const [showStats, setShowStats] = useState(false);
+
+    // Load explored zones from localStorage
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const saved = localStorage.getItem('orb_explored_zones');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                setExploredZones(parsed);
+            } catch (e) {
+                console.error('Failed to load explored zones:', e);
+            }
+        }
+    }, [setExploredZones]);
+
+    // Check location permission
+    useEffect(() => {
+        if ('permissions' in navigator) {
+            navigator.permissions.query({ name: 'geolocation' })
+                .then(result => {
+                    setLocationPermission(result.state);
+                    result.onchange = () => setLocationPermission(result.state);
+                })
+                .catch(() => {});
+        }
+    }, []);
+
+    // Initialize map
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!mapContainerRef.current) return;
+        if (mapRef.current || initAttemptedRef.current) return;
+
+        initAttemptedRef.current = true;
+
+        try {
+            // Fix Leaflet marker icons
+            if (L.Icon.Default && L.Icon.Default.prototype._getIconUrl) {
+                delete L.Icon.Default.prototype._getIconUrl;
+            }
+            L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            });
+
+            // Create map with default center
+            mapRef.current = L.map(mapContainerRef.current, {
+                zoomControl: false,
+                attributionControl: false,
+                zoomAnimation: true,
+                fadeAnimation: true,
+                markerZoomAnimation: true,
+                minZoom: 3,
+                maxZoom: 19,
+                worldCopyJump: true,
+                center: [51.505, -0.09],
+                zoom: 13
+            });
+
+            setMapInstance(mapRef.current);
+
+            // Add controls
+            L.control.zoom({ position: 'bottomright' }).addTo(mapRef.current);
+            L.control.attribution({ position: 'bottomright', prefix: '' }).addTo(mapRef.current);
+
+            setMapLoaded(true);
+
+        } catch (error) {
+            console.error('Map initialization error:', error);
+            setInitError(error.message);
+        }
+
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
+            initAttemptedRef.current = false;
+        };
+    }, [setMapInstance]);
+
+    // Update map tiles based on theme
+    useEffect(() => {
+        if (!mapRef.current || !mapLoaded) return;
+
+        // Abstract CartoDB tiles - NO street details
+        const tileLayers = {
+            dark: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+            light: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
+        };
+
+        const tileUrl = theme === 'dark' ? tileLayers.dark : tileLayers.light;
+
+        // Remove existing tiles
+        mapRef.current.eachLayer(layer => {
+            if (layer instanceof L.TileLayer) {
+                mapRef.current.removeLayer(layer);
+            }
+        });
+
+        // Add new tiles
+        L.tileLayer(tileUrl, {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            detectRetina: true,
+            updateWhenIdle: true,
+            updateWhenZooming: false,
+        }).addTo(mapRef.current);
+
+    }, [theme, mapLoaded]);
+
+    // Initialize Fog of War
+    useEffect(() => {
+        if (!mapRef.current || !mapLoaded) return;
+
+        fogOverlayRef.current = new FogOfWarOverlay(exploredZones, mapSettings.showFogOfWar, theme);
+        fogOverlayRef.current.addTo(mapRef.current);
+
+        return () => {
+            if (fogOverlayRef.current) {
+                fogOverlayRef.current.remove();
+            }
+        };
+    }, [mapLoaded]);
+
+    // Update Fog of War
+    useEffect(() => {
+        if (!fogOverlayRef.current) return;
+        fogOverlayRef.current.setExploredZones(exploredZones);
+        fogOverlayRef.current.setShowFogOfWar(mapSettings.showFogOfWar);
+        fogOverlayRef.current.setTheme(theme);
+    }, [exploredZones, mapSettings.showFogOfWar, theme]);
+
+    // Update user marker
+    useEffect(() => {
+        if (!mapRef.current || !userLocation) return;
+
+        const { latitude, longitude } = userLocation;
+
+        if (userMarkerRef.current) {
+            mapRef.current.removeLayer(userMarkerRef.current);
+        }
+
+        userMarkerRef.current = L.marker([latitude, longitude], {
+            icon: createPulseIcon(),
+            zIndexOffset: 1000
+        }).addTo(mapRef.current);
+
+        userMarkerRef.current.bindPopup(`
+            <div class="location-popup">
+                <strong>${userLocation.isMock ? '🧪 Mock Location' : 'Your Location'}</strong><br/>
+                Accuracy: ${Math.round(userLocation.accuracy)}m
+            </div>
+        `);
+
+        if (mapSettings.followUser) {
+            mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15, {
+                animate: true,
+                duration: 0.5
+            });
+        }
+
+    }, [userLocation, mapSettings.followUser]);
+
+    // Update friend markers
+    useEffect(() => {
+        if (!mapRef.current) return;
+
+        const currentFriendIds = new Set();
+
+        friendLocations.forEach(friend => {
+            if (!friend.latitude || !friend.longitude) return;
+
+            currentFriendIds.add(friend.user_id);
+
+            if (friendMarkersRef.current.has(friend.user_id)) {
+                mapRef.current.removeLayer(friendMarkersRef.current.get(friend.user_id));
+            }
+
+            const marker = L.marker([friend.latitude, friend.longitude], {
+                icon: createFriendIcon(friend.isOnline),
+                zIndexOffset: 900
+            }).addTo(mapRef.current);
+
+            const lastSeenText = friend.isOnline 
+                ? 'Online now' 
+                : `Last seen: ${formatLastSeen(friend.last_seen)}`;
+
+            marker.bindPopup(`
+                <div class="friend-popup">
+                    <strong>${friend.user?.username || 'Friend'}</strong><br/>
+                    <small>${lastSeenText}</small>
+                </div>
+            `);
+
+            friendMarkersRef.current.set(friend.user_id, marker);
+        });
+
+        friendMarkersRef.current.forEach((marker, userId) => {
+            if (!currentFriendIds.has(userId)) {
+                mapRef.current.removeLayer(marker);
+                friendMarkersRef.current.delete(userId);
+            }
+        });
+
+    }, [friendLocations, formatLastSeen]);
+
+    // Handlers
+    const handleLocateMe = useCallback(() => {
+        if (userLocation && mapRef.current) {
+            mapRef.current.setView([userLocation.latitude, userLocation.longitude], 16, {
+                animate: true,
+                duration: 0.5
+            });
+        }
+    }, [userLocation]);
+
+    const handleFriendSelect = useCallback((friend) => {
+        const location = friendLocations.find(l => l.user_id === friend.user_id);
+        if (location && mapRef.current) {
+            mapRef.current.setView([location.latitude, location.longitude], 16, {
+                animate: true,
+                duration: 0.5
+            });
+
+            const marker = friendMarkersRef.current.get(friend.user_id);
+            if (marker) {
+                marker.openPopup();
+            }
+        }
+    }, [friendLocations]);
+
+    const handleProfileClick = useCallback(() => {
+        setView('profile');
+    }, [setView]);
+
+    const toggleSettings = useCallback(() => {
+        setMapSettings(prev => ({ ...prev, showSettings: !prev.showSettings }));
+    }, [setMapSettings]);
+
+    const toggleLayer = useCallback(() => {
+        setMapSettings(prev => ({ ...prev, layer: prev.layer === 'dark' ? 'light' : 'dark' }));
+    }, [setMapSettings]);
+
+    const toggleFogOfWar = useCallback(() => {
+        setMapSettings(prev => ({ ...prev, showFogOfWar: !prev.showFogOfWar }));
+    }, [setMapSettings]);
+
+    const toggleFollowUser = useCallback(() => {
+        setMapSettings(prev => ({ ...prev, followUser: !prev.followUser }));
+    }, [setMapSettings]);
+
+    const toggleStats = useCallback(() => {
+        setShowStats(prev => !prev);
+    }, []);
+
+    const exploredArea = exploredZones.reduce((acc, zone) => {
+        return acc + Math.PI * Math.pow(zone.radius / 1000, 2);
+    }, 0);
+
+    return (
+        <div className="map-view-container">
+            {/* Map Container */}
+            <div 
+                ref={mapContainerRef} 
+                className="map-container"
+                style={{ width: '100%', height: '100%', minHeight: '100vh' }}
+            />
+
+            {/* TOP LEFT: Profile Avatar */}
+            <div className="map-controls-top-left">
+                <MapControlButton onClick={handleProfileClick} label="Profile">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </MapControlButton>
+            </div>
+
+            {/* TOP RIGHT: Settings & Layer */}
+            <div className="map-controls-top-right">
+                <MapControlButton onClick={toggleLayer} label="Toggle Layer">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                </MapControlButton>
+                <MapControlButton onClick={handleLocateMe} label="Locate Me">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                    </svg>
+                </MapControlButton>
+            </div>
+
+            {/* BOTTOM LEFT: Stats & Friends */}
+            <div className="map-controls-bottom-left">
+                <MapControlButton onClick={toggleStats} label="Stats" active={showStats}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                    </svg>
+                </MapControlButton>
+                <MapControlButton label="Friends">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                </MapControlButton>
+            </div>
+
+            {/* BOTTOM CENTER: Search Bar */}
+            <div className="map-controls-bottom-center">
+                <MapSearchBar 
+                    friends={friendLocations.map(fl => fl.user).filter(Boolean)}
+                    onFriendSelect={handleFriendSelect}
+                />
+            </div>
+
+            {/* BOTTOM RIGHT: Zoom controls are handled by Leaflet */}
+
+            {/* Stats Panel */}
+            {showStats && (
+                <div className="map-stats-panel">
+                    <div className="stat-item">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                        </svg>
+                        <span>{exploredArea.toFixed(1)} km² explored</span>
+                    </div>
+                    <div className="stat-item">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span>{friendLocations.length} friends nearby</span>
+                    </div>
+                    <div className="stat-item">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span>{exploredZones.length} zones explored</span>
+                    </div>
+                </div>
+            )}
+
+            {/* Location Permission Warning */}
+            {locationPermission === 'denied' && (
+                <div className="location-permission-warning">
+                    <div className="warning-content">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <p>Location access is disabled. Enable it in your browser settings.</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Init Error */}
+            {initError && (
+                <div className="location-permission-warning">
+                    <div className="warning-content">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <p>Map failed to load: {initError}</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Loading State */}
+            {!mapLoaded && !initError && (
+                <div className="map-loading">
+                    <div className="loading-spinner"></div>
+                    <p>Loading map...</p>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function MapView() {
+    return <MapViewContent />;
+}

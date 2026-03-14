@@ -1,0 +1,654 @@
+/* src/styles/MapView.css */
+/* ============================================
+   ORB SOCIAL - INTERACTIVE MAP STYLES
+   Zenly-style map with Fog of War
+   Glassmorphism Design System
+   ============================================ */
+
+/* Map View Container */
+.map-view-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 100dvh;
+    overflow: hidden;
+    background: var(--background);
+}
+
+.map-container {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+/* ============================================
+   LEAFLET OVERRIDES
+   ============================================ */
+
+.leaflet-container {
+    background: var(--background);
+    font-family: inherit;
+}
+
+.leaflet-control-zoom {
+    border: none !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15) !important;
+    overflow: hidden;
+}
+
+.leaflet-control-zoom a {
+    background: rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: var(--foreground) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+    font-size: 20px !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.leaflet-control-zoom a:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.leaflet-control-zoom-in {
+    border-radius: 8px 8px 0 0 !important;
+}
+
+.leaflet-control-zoom-out {
+    border-radius: 0 0 8px 8px !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.leaflet-control-attribution {
+    background: rgba(0, 0, 0, 0.3) !important;
+    backdrop-filter: blur(8px);
+    color: var(--foreground-muted) !important;
+    font-size: 9px !important;
+    padding: 4px 8px !important;
+    border-radius: 6px !important;
+}
+
+.leaflet-control-attribution a {
+    color: var(--foreground-muted) !important;
+}
+
+/* ============================================
+   GLASSMORPHISM BUTTONS
+   ============================================ */
+
+.map-control-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--foreground);
+    padding: 0;
+    margin: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.map-control-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.map-control-btn:active {
+    transform: scale(0.98);
+}
+
+.map-control-btn.active {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.map-control-btn svg {
+    width: 18px;
+    height: 18px;
+    strokeWidth: 1.5;
+    strokeLinecap: round;
+    strokeLinejoin: round;
+}
+
+/* ============================================
+   CONTROL POSITIONING
+   ============================================ */
+
+.map-controls-top-left {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 500;
+}
+
+.map-controls-top-right {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.map-controls-bottom-left {
+    position: absolute;
+    bottom: 100px;
+    left: 12px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.map-controls-bottom-center {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    width: calc(100% - 48px);
+    max-width: 400px;
+    padding: 0 8px;
+}
+
+.map-controls-bottom-right {
+    position: absolute;
+    bottom: 24px;
+    right: 12px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* ============================================
+   SEARCH BAR
+   ============================================ */
+
+.map-search-container {
+    position: relative;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    transition: all 0.2s ease;
+    overflow: visible;
+}
+
+.map-search-container.focused {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.map-search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.map-search-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--foreground-muted);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.map-search {
+    width: 100%;
+    padding: 10px 36px 10px 40px;
+    background: transparent;
+    border: none;
+    color: var(--foreground);
+    font-size: 14px;
+    outline: none;
+    border-radius: 20px;
+}
+
+.map-search::placeholder {
+    color: var(--foreground-muted);
+}
+
+.map-search-clear {
+    position: absolute;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: var(--foreground-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.map-search-clear:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--foreground);
+}
+
+.map-search-results {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background: rgba(20, 20, 20, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    max-height: 280px;
+    overflow-y: auto;
+    animation: dropdown-appear 0.2s ease;
+}
+
+@keyframes dropdown-appear {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.map-search-result-item {
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    color: var(--foreground);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    text-align: left;
+}
+
+.map-search-result-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.result-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--foreground-muted);
+    flex-shrink: 0;
+}
+
+.result-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-search-no-results {
+    padding: 16px;
+    text-align: center;
+    color: var(--foreground-muted);
+    font-size: 13px;
+}
+
+/* ============================================
+   STATS PANEL
+   ============================================ */
+
+.map-stats-panel {
+    position: absolute;
+    bottom: 160px;
+    left: 12px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: slide-up 0.3s ease;
+}
+
+@keyframes slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    color: var(--foreground-muted);
+    font-size: 12px;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-item svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+/* ============================================
+   FOG OF WAR CANVAS
+   ============================================ */
+
+.leaflet-fog-overlay {
+    z-index: 400;
+    pointer-events: none;
+}
+
+/* ============================================
+   CUSTOM MARKERS
+   ============================================ */
+
+/* Pulse Marker (Current User) */
+.custom-pulse-marker .pulse-marker-container {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.custom-pulse-marker .pulse-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0.3;
+    animation: pulse-ring 2s ease-out infinite;
+}
+
+.custom-pulse-marker .pulse-dot {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid var(--background);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 2;
+}
+
+@keyframes pulse-ring {
+    0% {
+        transform: scale(0.5);
+        opacity: 0.5;
+    }
+    100% {
+        transform: scale(1.5);
+        opacity: 0;
+    }
+}
+
+/* Friend Marker */
+.custom-friend-marker .friend-marker-container {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.custom-friend-marker .friend-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--background-elevated);
+    border: 2px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--foreground);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease;
+}
+
+.custom-friend-marker:hover .friend-avatar {
+    transform: scale(1.1);
+}
+
+.custom-friend-marker .friend-status-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--background);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   POPUPS
+   ============================================ */
+
+.leaflet-popup-content-wrapper {
+    background: rgba(20, 20, 20, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    padding: 0;
+}
+
+.leaflet-popup-content {
+    margin: 12px 16px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--foreground);
+}
+
+.leaflet-popup-content strong {
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.leaflet-popup-content small {
+    color: var(--foreground-muted);
+    font-size: 11px;
+}
+
+.leaflet-popup-tip {
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.location-popup,
+.friend-popup {
+    text-align: center;
+}
+
+/* ============================================
+   LOADING STATE
+   ============================================ */
+
+.map-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.map-loading p {
+    color: var(--foreground-muted);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.15);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ============================================
+   PERMISSION WARNING
+   ============================================ */
+
+.location-permission-warning {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 600;
+    width: 100%;
+    max-width: 340px;
+    padding: 0 16px;
+}
+
+.warning-content {
+    background: rgba(20, 20, 20, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--error);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: warning-appear 0.3s ease;
+}
+
+@keyframes warning-appear {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.warning-content svg {
+    color: var(--error);
+}
+
+.warning-content p {
+    color: var(--foreground);
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* ============================================
+   THEME ADJUSTMENTS
+   ============================================ */
+
+[data-theme='dark'] .map-search-results {
+    background: rgba(20, 20, 20, 0.95);
+}
+
+[data-theme='light'] .map-search-results {
+    background: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme='light'] .map-control-btn {
+    background: rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.15);
+    color: var(--foreground);
+}
+
+[data-theme='light'] .map-control-btn:hover {
+    background: rgba(0, 0, 0, 0.15);
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme='light'] .leaflet-control-attribution {
+    background: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (min-width: 768px) {
+    .map-controls-bottom-center {
+        max-width: 500px;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .custom-pulse-marker .pulse-ring,
+    .leaflet-popup-content-wrapper,
+    .map-search-results,
+    .map-stats-panel,
+    .warning-content {
+        animation: none;
+    }
+}
+
+.map-control-btn:focus-visible,
+.map-search-result-item:focus-visible,
+.map-search-clear:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
