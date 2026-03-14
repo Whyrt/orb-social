@@ -214,6 +214,21 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* Demo mode button */
+.map-control-btn.control-demo {
+    background: rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.4);
+}
+
+.map-control-btn.control-demo.active {
+    background: rgba(251, 191, 36, 0.4);
+    border-color: rgba(251, 191, 36, 0.6);
+}
+
+.map-control-btn.control-demo:hover {
+    background: rgba(251, 191, 36, 0.3);
+}
+
 /* ============================================
    SEARCH BAR
    ============================================ */
@@ -1108,4 +1123,42 @@
 
 .map-preview-card .border-b {
     border-bottom: 1px solid var(--border-color);
+}
+
+/* ============================================
+   DEMO MODE INDICATOR
+   ============================================ */
+
+.demo-mode-indicator {
+    position: absolute;
+    top: max(60px, calc(50px + env(safe-area-inset-top)));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.demo-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(251, 191, 36, 0.2);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    border-radius: 20px;
+    color: #fbbf24;
+    font-size: 11px;
+    font-weight: 600;
+    box-shadow: 0 2px 12px rgba(251, 191, 36, 0.3);
+}
+
+.demo-badge svg {
+    flex-shrink: 0;
+}
+
+.demo-badge span {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }

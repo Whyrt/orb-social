@@ -217,7 +217,16 @@ export function useGeolocation() {
         const errorMessage = getGeolocationErrorMessage(error);
         setError(errorMessage);
         console.warn('Geolocation error, using demo location:', errorMessage);
-        
+
+        // Auto-enable demo mode if not already enabled
+        if (typeof window !== 'undefined') {
+            const currentDemo = localStorage.getItem('orb_demo_location') === 'true';
+            if (!currentDemo) {
+                console.log('🧪 Auto-enabling demo mode (London)');
+                localStorage.setItem('orb_demo_location', 'true');
+            }
+        }
+
         // Auto-fallback to demo location
         handlePositionUpdate(DEMO_LOCATION);
     }, [handlePositionUpdate]);

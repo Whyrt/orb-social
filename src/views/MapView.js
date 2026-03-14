@@ -929,6 +929,15 @@ function MapViewContent() {
         setShowStats(prev => !prev);
     }, []);
 
+    const toggleDemoMode = useCallback(() => {
+        const current = localStorage.getItem('orb_demo_location') === 'true';
+        localStorage.setItem('orb_demo_location', current ? 'false' : 'true');
+        console.log(`🧪 Demo mode ${current ? 'disabled' : 'enabled'}`);
+        window.location.reload();
+    }, []);
+
+    const isDemoMode = typeof window !== 'undefined' && localStorage.getItem('orb_demo_location') === 'true';
+
     const exploredArea = exploredZones.reduce((acc, zone) => {
         return acc + Math.PI * Math.pow(zone.radius / 1000, 2);
     }, 0);
@@ -954,6 +963,14 @@ function MapViewContent() {
 
             {/* TOP RIGHT: Theme Toggle + Settings (vertical stack, 40px each) */}
             <div className="map-controls-top-right">
+                <MapControlButton onClick={toggleDemoMode} label="Demo Mode" active={isDemoMode} className="control-demo" title={isDemoMode ? 'Demo: ON' : 'Demo: OFF'}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                        <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                        <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                    </svg>
+                </MapControlButton>
                 <MapControlButton onClick={toggleLayer} label="Toggle Theme" className="control-theme">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -1044,6 +1061,21 @@ function MapViewContent() {
                             <line x1="12" y1="20" x2="12.01" y2="20"></line>
                         </svg>
                         <p>You're offline. Map will load when connection is restored.</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Demo Mode Indicator */}
+            {isDemoMode && (
+                <div className="demo-mode-indicator">
+                    <div className="demo-badge">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                            <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                            <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                        </svg>
+                        <span>Демо режим (Лондон)</span>
                     </div>
                 </div>
             )}
