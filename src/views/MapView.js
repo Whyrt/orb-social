@@ -799,6 +799,10 @@ function MapViewContent() {
         }
     }, [friendLocations]);
 
+    const handleBack = useCallback(() => {
+        setView('menu');
+    }, [setView]);
+
     const handleProfileClick = useCallback(() => {
         setView('profile');
     }, [setView]);
@@ -832,12 +836,12 @@ function MapViewContent() {
                 style={{ width: '100%', height: '100%', minHeight: '100vh' }}
             />
 
-            {/* TOP LEFT: Profile Avatar (40px) */}
+            {/* TOP LEFT: Back Button (40px) */}
             <div className="map-controls-top-left">
-                <MapControlButton onClick={handleProfileClick} label="Profile" className="control-profile">
+                <MapControlButton onClick={handleBack} label="Back to Menu" className="control-back">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
                     </svg>
                 </MapControlButton>
             </div>

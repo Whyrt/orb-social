@@ -184,6 +184,7 @@
 }
 
 /* Control button size variants */
+.map-control-btn.control-back,
 .map-control-btn.control-profile,
 .map-control-btn.control-theme,
 .map-control-btn.control-fog,
@@ -201,6 +202,16 @@
     strokeWidth: 1.5;
     strokeLinecap: round;
     strokeLinejoin: round;
+}
+
+/* Back button specific style */
+.map-control-btn.control-back {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.map-control-btn.control-back:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 /* ============================================

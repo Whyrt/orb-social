@@ -223,7 +223,7 @@ export function useGeolocation() {
     }, [handlePositionUpdate]);
 
     /**
-     * Start watching with mobile optimizations
+     * Start watching with mobile optimizations and real-time tracking
      */
     const startWatching = useCallback(async () => {
         // Clear any existing watchers
@@ -239,19 +239,20 @@ export function useGeolocation() {
         setError(null);
 
         // Check if using demo mode
-        const useDemo = typeof window !== 'undefined' && 
+        const useDemo = typeof window !== 'undefined' &&
             (localStorage.getItem('orb_demo_location') === 'true' || !isSecureContext);
 
         if (useDemo) {
             console.log('🧪 Starting demo location watcher');
             handlePositionUpdate(DEMO_LOCATION);
-            
+
+            // Update demo location every 2 seconds for smooth tracking
             demoWatchIntervalRef.current = setInterval(() => {
                 handlePositionUpdate({
                     ...DEMO_LOCATION,
                     timestamp: Date.now()
                 });
-            }, 5000);
+            }, 2000);
             return;
         }
 
@@ -268,12 +269,12 @@ export function useGeolocation() {
             // First, get initial position
             const initialPosition = await getGeolocation({
                 enableHighAccuracy: true,
-                timeout: 15000,
+                timeout: 10000,
                 maximumAge: 0
             });
             handlePositionUpdate(initialPosition);
 
-            // Then start watching
+            // Then start watching with optimized settings for real-time tracking
             watchIdRef.current = navigator.geolocation.watchPosition(
                 (position) => {
                     handlePositionUpdate({
@@ -285,9 +286,9 @@ export function useGeolocation() {
                 },
                 handleGeolocationError,
                 {
-                    enableHighAccuracy: true,
-                    timeout: 15000,
-                    maximumAge: 10000
+                    enableHighAccuracy: true,      // Use GPS for best accuracy
+                    timeout: 10000,                // 10 second timeout
+                    maximumAge: 0,                 // Don't accept cached positions
                 }
             );
         } catch (error) {

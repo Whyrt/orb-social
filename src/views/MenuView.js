@@ -5,14 +5,13 @@ import { useActions } from '@/lib/actions';
 import { useDevice } from '@/hooks/useDevice';
 
 // Dynamic import for MiniMapPreview to avoid SSR issues with Leaflet
-const MiniMapPreview = React.lazy(() => 
+const MiniMapPreview = React.lazy(() =>
     import('@/views/MapView').then(module => ({ default: module.MiniMapPreview }))
 );
 
 /**
  * MenuView - Main Dashboard
- * Layout: Clean, minimal center with status indicators at top
- * Center screen is intentionally FREE for the 3D Neural Sphere visualization
+ * Layout: Live Map card centered on screen with top status bar
  */
 export default function MenuView() {
     const user = useAtomValue(userAtom);
@@ -47,7 +46,7 @@ export default function MenuView() {
         <div className="absolute inset-0 flex flex-col overflow-hidden grid-pattern"
              style={{ backgroundColor: 'var(--background)' }}>
 
-            {/* TOP BAR - Status indicators (does not block center) */}
+            {/* TOP BAR - Status indicators */}
             <div className="absolute top-0 left-0 right-0 z-50 pointer-events-auto px-4 pt-4">
                 <div className="flex justify-between items-start">
                     {/* Left: User initial */}
@@ -79,20 +78,18 @@ export default function MenuView() {
                 </div>
             </div>
 
-            {/* CENTER SCREEN - INTENTIONALLY EMPTY for 3D Neural Sphere */}
-            {/* The center is now completely free for the background visualization */}
-
-            {/* Live Map Preview Card - Above Bottom Bar */}
-            <div className="absolute bottom-20 left-0 right-0 z-[1500] pointer-events-auto px-4">
-                <div className="map-preview-card terminal-border" 
+            {/* CENTER SCREEN - Live Map Preview Card */}
+            <div className="absolute inset-0 z-[1500] pointer-events-auto flex items-center justify-center px-4">
+                <div className="w-full max-w-md map-preview-card terminal-border"
                      style={{
                          backgroundColor: 'var(--background-elevated)',
                          backdropFilter: 'blur(10px)',
                          borderRadius: '16px',
-                         overflow: 'hidden'
+                         overflow: 'hidden',
+                         maxHeight: 'calc(100vh - 120px)'
                      }}>
                     {/* Card header */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b" 
+                    <div className="flex items-center justify-between px-4 py-3 border-b"
                          style={{ borderColor: 'var(--border-color)' }}>
                         <div className="flex items-center gap-2">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--foreground)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -106,15 +103,15 @@ export default function MenuView() {
                             See where your friends are
                         </span>
                     </div>
-                    
+
                     {/* Mini map preview - Client side only */}
                     <Suspense fallback={
-                        <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-muted)', fontSize: '12px' }}>
+                        <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-muted)', fontSize: '12px' }}>
                             Loading map...
                         </div>
                     }>
-                        <MiniMapPreview 
-                            height={200} 
+                        <MiniMapPreview
+                            height={300}
                             onOpenMap={handleOpenMap}
                         />
                     </Suspense>

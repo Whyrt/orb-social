@@ -248,8 +248,8 @@ function OrbContent() {
                 <Interface />
             </div>
             
-            {/* Bottom navigation bar */}
-            {!activeChat && <BottomBar view={view} setView={setView} isDesktop={isDesktop} />}
+            {/* Bottom navigation bar - hidden on map view */}
+            {!activeChat && view !== 'map' && <BottomBar view={view} setView={setView} isDesktop={isDesktop} />}
         </div>
     )
 }
