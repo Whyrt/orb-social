@@ -55,13 +55,14 @@ export function useAppInitializer() {
                 }, (payload) => {
                     addMessageToChat(payload.new);
                 })
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'members'
-                }, () => {
-                    loadUserData(user);
-                })
+                // Отключили подписку на members - она вызывала постоянные re-render
+                // .on('postgres_changes', {
+                //     event: '*',
+                //     schema: 'public',
+                //     table: 'members'
+                // }, () => {
+                //     loadUserData(user);
+                // })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') {
                         realtimeSubscribedRef.current = true;
@@ -82,7 +83,7 @@ export function useAppInitializer() {
                 realtimeSubscribedRef.current = false;
             }
         };
-    }, [user, setConnectionStatus, loadUserData, addMessageToChat]);
+    }, [user, setConnectionStatus, addMessageToChat]); // Removed loadUserData from dependencies
 
     // Загрузка истории чата
     useEffect(() => {
