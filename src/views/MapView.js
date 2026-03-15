@@ -718,7 +718,7 @@ function MapViewContent() {
             return;
         }
 
-        if (!userLocation) {
+        if (!userLocation || !userLocation.latitude || !userLocation.longitude) {
             return;
         }
 
@@ -746,28 +746,34 @@ function MapViewContent() {
             userMarkerRef.current.bindPopup(`
                 <div class="location-popup" style="text-align: center;">
                     <strong>${locationLabel}</strong><br/>
-                    <small>Точность: ${Math.round(userLocation.accuracy)}м</small>
+                    <small>Точность: ${Math.round(userLocation.accuracy || 0)}м</small>
                 </div>
             `);
 
             // Auto-follow ONLY on initial load or when zoom is far from user
             // Don't follow on every small location update
             if (mapSettings.followUser) {
-                const currentCenter = mapRef.current.getCenter();
-                const distance = calculateDistance(
-                    currentCenter.lat,
-                    currentCenter.lng,
-                    latitude,
-                    longitude
-                );
-                
-                // Only auto-center if user is more than 500m away from center
-                if (distance > 500 || !hasCenteredRef.current) {
-                    mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15, {
-                        animate: true,
-                        duration: 0.5
-                    });
-                    hasCenteredRef.current = true;
+                try {
+                    const currentCenter = mapRef.current.getCenter();
+                    if (currentCenter) {
+                        const distance = calculateDistance(
+                            currentCenter.lat,
+                            currentCenter.lng,
+                            latitude,
+                            longitude
+                        );
+                        
+                        // Only auto-center if user is more than 500m away from center
+                        if (distance > 500 || !hasCenteredRef.current) {
+                            mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15, {
+                                animate: true,
+                                duration: 0.5
+                            });
+                            hasCenteredRef.current = true;
+                        }
+                    }
+                } catch (centerError) {
+                    // Map not ready, skip auto-center
                 }
             }
         } catch (error) {

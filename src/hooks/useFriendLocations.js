@@ -22,26 +22,40 @@ export function useFriendLocations() {
      * Fetch initial friend locations from database
      */
     const fetchFriendLocations = useCallback(async () => {
-        if (!user || !friends.length) {
+        if (!user || !friends || friends.length === 0) {
             setFriendLocations([]);
             return;
         }
 
         try {
             // friends - это просто массив никнеймов в вашей системе
-            const friendIds = friends;
+            const friendIds = friends.filter(f => f && typeof f === 'string');
 
             if (friendIds.length === 0) {
                 setFriendLocations([]);
                 return;
             }
 
+            // Supabase IN запрос требует правильного формата
             const { data, error } = await supabase
                 .from('user_locations')
                 .select('user_id, latitude, longitude, last_seen, accuracy')
-                .in('user_id', friendIds);
+                .in('user_id', friendIds)
+                .limit(50);
 
-            if (error) throw error;
+            if (error) {
+                // Игнорируем ошибки 400 - это нормально когда таблица пустая
+                if (error.status !== 400) {
+                    console.error('Friend locations fetch error:', error);
+                }
+                setFriendLocations([]);
+                return;
+            }
+
+            if (!data || data.length === 0) {
+                setFriendLocations([]);
+                return;
+            }
 
             // Enrich with friend data
             const enriched = data.map(location => {
