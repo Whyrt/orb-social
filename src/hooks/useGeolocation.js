@@ -425,7 +425,8 @@ export function useGeolocationTracker() {
         return () => {
             stopWatching();
         };
-    }, [locationSharing, startWatching, stopWatching]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [locationSharing]); // Только locationSharing, не пересоздаём watcher при изменении функций
 
     // Setup Supabase Realtime channel for broadcasting location
     useEffect(() => {
