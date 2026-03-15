@@ -412,7 +412,7 @@ export function useGeolocation() {
  */
 export function useGeolocationTracker() {
     const locationSharing = useAtomValue(locationSharingAtom);
-    const user = useAtomValue(userAtom);
+    const user = useAtomValue(userAtom); // user - это никнейм (строка)
 
     const { startWatching, stopWatching, error, permissionState } = useGeolocation();
 
@@ -429,12 +429,13 @@ export function useGeolocationTracker() {
 
     // Setup Supabase Realtime channel for broadcasting location
     useEffect(() => {
+        // user - это строка (никнейм), а не объект с id
         if (!user || !locationSharing) return;
 
         const channel = supabase.channel('user_locations_broadcast', {
             config: {
                 broadcast: { self: true },
-                presence: { key: user.id }
+                presence: { key: user } // Используем user напрямую (никнейм)
             }
         });
 
