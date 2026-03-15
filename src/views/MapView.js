@@ -275,6 +275,21 @@ class FogOfWarOverlay extends L.Layer {
 
     _redraw() {
         if (!this._map || !this.showFogOfWar) {
+            if (this._canvas) {
+                this._canvas.style.display = 'none';
+            }
+            return;
+        }
+
+        // Check if map is fully initialized
+        try {
+            const size = this._map.getSize();
+            if (!size || size.x === 0 || size.y === 0) {
+                this._canvas.style.display = 'none';
+                return;
+            }
+        } catch (e) {
+            // Map not ready
             this._canvas.style.display = 'none';
             return;
         }
@@ -297,20 +312,29 @@ class FogOfWarOverlay extends L.Layer {
         ctx.globalCompositeOperation = 'destination-out';
 
         this.exploredZones.forEach(zone => {
-            const centerPoint = this._map.latLngToContainerPoint([zone.center.lat, zone.center.lng]);
-            const radiusPixels = this._pixelsPerMeterAtLat(zone.center.lat) * zone.radius;
+            // Validate zone center before projection
+            if (!zone.center || typeof zone.center.lat !== 'number' || typeof zone.center.lng !== 'number') {
+                return;
+            }
 
-            const gradient = ctx.createRadialGradient(
-                centerPoint.x, centerPoint.y, radiusPixels * 0.7,
-                centerPoint.x, centerPoint.y, radiusPixels
-            );
-            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            try {
+                const centerPoint = this._map.latLngToContainerPoint([zone.center.lat, zone.center.lng]);
+                const radiusPixels = this._pixelsPerMeterAtLat(zone.center.lat) * zone.radius;
 
-            ctx.beginPath();
-            ctx.arc(centerPoint.x, centerPoint.y, radiusPixels, 0, Math.PI * 2);
-            ctx.fillStyle = gradient;
-            ctx.fill();
+                const gradient = ctx.createRadialGradient(
+                    centerPoint.x, centerPoint.y, radiusPixels * 0.7,
+                    centerPoint.x, centerPoint.y, radiusPixels
+                );
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+                ctx.beginPath();
+                ctx.arc(centerPoint.x, centerPoint.y, radiusPixels, 0, Math.PI * 2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+            } catch (e) {
+                // Skip this zone if projection fails
+            }
         });
 
         ctx.globalCompositeOperation = 'source-over';
@@ -372,6 +396,9 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
                 shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
             });
 
+            const defaultCenter = [51.505, -0.09];
+            const defaultZoom = 13;
+
             mapRef.current = L.map(mapContainerRef.current, {
                 zoomControl: false,
                 attributionControl: false,
@@ -380,8 +407,8 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
                 minZoom: 10,
                 maxZoom: 16,
                 worldCopyJump: true,
-                center: userLocation ? [userLocation.latitude, userLocation.longitude] : [51.505, -0.09],
-                zoom: userLocation ? 14 : 13,
+                center: defaultCenter,
+                zoom: defaultZoom,
                 preferCanvas: true,
                 scrollWheelZoom: false,
                 doubleClickZoom: false,
@@ -391,7 +418,7 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
             });
 
             const isDark = theme === 'dark' || theme === 'system';
-            const tileUrl = isDark 
+            const tileUrl = isDark
                 ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
                 : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
@@ -407,7 +434,19 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
                 crossOrigin: true,
             }).addTo(mapRef.current);
 
-            setIsInitialized(true);
+            // Wait for map to be fully initialized before marking as ready
+            // This prevents the "Cannot read properties of null (reading 'lat')" error
+            setTimeout(() => {
+                try {
+                    const center = mapRef.current?.getCenter();
+                    if (center) {
+                        setIsInitialized(true);
+                    }
+                } catch (e) {
+                    // Map not ready yet
+                }
+            }, 200);
+
         } catch (error) {
             // Mini map init error
         }
@@ -452,10 +491,11 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
 
         // Проверка что карта имеет размер
         const mapContainer = mapRef.current.getContainer();
-        if (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0) {
+        if (!mapContainer || mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0) {
             return;
         }
 
+        // Clear existing markers
         mapRef.current.eachLayer((layer) => {
             if (layer instanceof L.Marker || layer instanceof L.Circle) {
                 mapRef.current.removeLayer(layer);
@@ -469,22 +509,30 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
             ? [userLocation.latitude, userLocation.longitude]
             : defaultCenter;
 
-        mapRef.current.setView(center, hasValidLocation ? 14 : 13);
+        try {
+            mapRef.current.setView(center, hasValidLocation ? 14 : 13);
+        } catch (e) {
+            // Map view update failed
+        }
 
         if (hasValidLocation) {
-            const userIcon = createUserMarker(theme === 'dark');
-            L.marker([userLocation.latitude, userLocation.longitude], {
-                icon: userIcon,
-                zIndexOffset: 1000,
-            }).addTo(mapRef.current);
+            try {
+                const userIcon = createUserMarker(theme === 'dark');
+                L.marker([userLocation.latitude, userLocation.longitude], {
+                    icon: userIcon,
+                    zIndexOffset: 1000,
+                }).addTo(mapRef.current);
 
-            L.circle([userLocation.latitude, userLocation.longitude], {
-                radius: userLocation.accuracy || 20,
-                color: theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
-                fillColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                fillOpacity: 0.3,
-                weight: 1,
-            }).addTo(mapRef.current);
+                L.circle([userLocation.latitude, userLocation.longitude], {
+                    radius: userLocation.accuracy || 20,
+                    color: theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
+                    fillColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                    fillOpacity: 0.3,
+                    weight: 1,
+                }).addTo(mapRef.current);
+            } catch (e) {
+                // User marker creation failed
+            }
         }
 
         const isDark = theme === 'dark' || theme === 'system';
@@ -494,11 +542,15 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
                 typeof friend.longitude === 'number' &&
                 !isNaN(friend.latitude) &&
                 !isNaN(friend.longitude)) {
-                const friendIcon = createFriendMarker(friend.isOnline, isDark);
-                L.marker([friend.latitude, friend.longitude], {
-                    icon: friendIcon,
-                    zIndexOffset: 900,
-                }).addTo(mapRef.current);
+                try {
+                    const friendIcon = createFriendMarker(friend.isOnline, isDark);
+                    L.marker([friend.latitude, friend.longitude], {
+                        icon: friendIcon,
+                        zIndexOffset: 900,
+                    }).addTo(mapRef.current);
+                } catch (e) {
+                    // Friend marker creation failed
+                }
             }
         });
 
@@ -618,7 +670,7 @@ function MapViewContent() {
                 setTimeout(checkContainerSize, 100);
                 return;
             }
-            
+
             initAttemptedRef.current = true;
 
             try {
@@ -654,7 +706,29 @@ function MapViewContent() {
                     prefix: ''
                 }).addTo(mapRef.current);
 
-                setMapLoaded(true);
+                // Wait for map to be fully initialized before marking as loaded
+                // This prevents the "Cannot read properties of null (reading 'lat')" error
+                const onMapLoad = () => {
+                    setMapLoaded(true);
+                    mapRef.current.off('load', onMapLoad);
+                };
+
+                // Use setTimeout to ensure map projection is ready
+                setTimeout(() => {
+                    try {
+                        // Verify map is working
+                        const center = mapRef.current.getCenter();
+                        if (center) {
+                            setMapLoaded(true);
+                        } else {
+                            // Fallback: listen for load event
+                            mapRef.current.on('load', onMapLoad);
+                        }
+                    } catch (e) {
+                        // Map not ready yet, listen for load event
+                        mapRef.current.on('load', onMapLoad);
+                    }
+                }, 200);
 
             } catch (error) {
                 setInitError(error.message);
@@ -747,14 +821,27 @@ function MapViewContent() {
     // CRITICAL: Update user marker - simplified and reliable
     // Only update marker position, don't follow user on every location update
     useEffect(() => {
+        // Check map readiness first
         if (!mapRef.current || !mapLoaded) {
             return;
         }
 
-        const hasValidLocation = userLocation && 
-                                  typeof userLocation.latitude === 'number' && 
+        // Additional check: ensure map methods are available
+        try {
+            const center = mapRef.current.getCenter();
+            if (!center) {
+                // Map projection not ready
+                return;
+            }
+        } catch (e) {
+            // Map not fully initialized, skip this update
+            return;
+        }
+
+        const hasValidLocation = userLocation &&
+                                  typeof userLocation.latitude === 'number' &&
                                   typeof userLocation.longitude === 'number' &&
-                                  !isNaN(userLocation.latitude) && 
+                                  !isNaN(userLocation.latitude) &&
                                   !isNaN(userLocation.longitude);
 
         if (!hasValidLocation) {
@@ -766,7 +853,11 @@ function MapViewContent() {
 
         // Remove existing marker
         if (userMarkerRef.current) {
-            mapRef.current.removeLayer(userMarkerRef.current);
+            try {
+                mapRef.current.removeLayer(userMarkerRef.current);
+            } catch (e) {
+                // Marker removal failed
+            }
             userMarkerRef.current = null;
         }
 
@@ -801,7 +892,7 @@ function MapViewContent() {
                             latitude,
                             longitude
                         );
-                        
+
                         // Only auto-center if user is more than 500m away from center
                         if (distance > 500 || !hasCenteredRef.current) {
                             mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15);
@@ -813,7 +904,7 @@ function MapViewContent() {
                 }
             }
         } catch (error) {
-            // Error creating marker
+            // Error creating marker - silently fail
         }
 
     }, [userLocation, mapLoaded, mapSettings.followUser, theme]);
@@ -822,40 +913,72 @@ function MapViewContent() {
     useEffect(() => {
         if (!mapRef.current || !mapLoaded) return;
 
+        // Additional check: ensure map projection is ready
+        try {
+            const center = mapRef.current.getCenter();
+            if (!center) {
+                // Map projection not ready
+                return;
+            }
+        } catch (e) {
+            // Map not fully initialized, skip this update
+            return;
+        }
+
         const currentFriendIds = new Set();
         const isDark = theme === 'dark' || theme === 'system';
 
         friendLocations.forEach(friend => {
-            if (!friend.latitude || !friend.longitude) return;
+            // Validate friend location data
+            if (!friend || typeof friend.latitude !== 'number' || typeof friend.longitude !== 'number') {
+                return;
+            }
+            if (isNaN(friend.latitude) || isNaN(friend.longitude)) {
+                return;
+            }
 
             currentFriendIds.add(friend.user_id);
 
+            // Remove existing marker if present
             if (friendMarkersRef.current.has(friend.user_id)) {
-                mapRef.current.removeLayer(friendMarkersRef.current.get(friend.user_id));
+                try {
+                    mapRef.current.removeLayer(friendMarkersRef.current.get(friend.user_id));
+                } catch (e) {
+                    // Marker removal failed
+                }
             }
 
-            const marker = L.marker([friend.latitude, friend.longitude], {
-                icon: createFriendMarker(friend.isOnline, isDark),
-                zIndexOffset: 900
-            }).addTo(mapRef.current);
+            try {
+                const marker = L.marker([friend.latitude, friend.longitude], {
+                    icon: createFriendMarker(friend.isOnline, isDark),
+                    zIndexOffset: 900
+                }).addTo(mapRef.current);
 
-            const lastSeenText = friend.isOnline
-                ? 'Online now'
-                : `Last seen: ${formatLastSeen(friend.last_seen)}`;
+                const lastSeenText = friend.isOnline
+                    ? 'Online now'
+                    : `Last seen: ${formatLastSeen(friend.last_seen)}`;
 
-            marker.bindPopup(`
-                <div class="friend-popup">
-                    <strong>${friend.user?.username || 'Friend'}</strong><br/>
-                    <small>${lastSeenText}</small>
-                </div>
-            `);
+                marker.bindPopup(`
+                    <div class="friend-popup">
+                        <strong>${friend.user?.username || 'Friend'}</strong><br/>
+                        <small>${lastSeenText}</small>
+                    </div>
+                `);
 
-            friendMarkersRef.current.set(friend.user_id, marker);
+                friendMarkersRef.current.set(friend.user_id, marker);
+            } catch (e) {
+                // Friend marker creation failed - silently skip
+            }
         });
 
+        // Remove markers for friends no longer in the list
         friendMarkersRef.current.forEach((marker, userId) => {
             if (!currentFriendIds.has(userId)) {
-                mapRef.current.removeLayer(marker);
+                try {
+                    mapRef.current.removeLayer(marker);
+                } catch (e) {
+                    // Marker removal failed
+                }
                 friendMarkersRef.current.delete(userId);
             }
         });
