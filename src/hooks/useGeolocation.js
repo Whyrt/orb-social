@@ -6,11 +6,12 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * Demo location for fallback when permission denied
+ * Using valid coordinates (London, UK) for demo purposes
  */
 const DEMO_LOCATION = {
     coords: {
-        latitude: null,
-        longitude: null,
+        latitude: 51.5074,
+        longitude: -0.1278,
         accuracy: 10,
         heading: 0,
         speed: 0

@@ -607,6 +607,7 @@ function MapViewContent() {
     const setView = useSetAtom(viewAtom);
 
     const { formatLastSeen } = useFriendLocations();
+    const { addToast } = useActions();
     const [mapLoaded, setMapLoaded] = useState(false);
     const [locationPermission, setLocationPermission] = useState('prompt');
     const [initError, setInitError] = useState(null);
@@ -880,8 +881,7 @@ function MapViewContent() {
                 </div>
             `);
 
-            // Auto-follow ONLY on initial load or when zoom is far from user
-            // Don't follow on every small location update
+            // Auto-follow logic
             if (mapSettings.followUser) {
                 try {
                     const currentCenter = mapRef.current.getCenter();
@@ -893,8 +893,10 @@ function MapViewContent() {
                             longitude
                         );
 
-                        // Only auto-center if user is more than 500m away from center
-                        if (distance > 500 || !hasCenteredRef.current) {
+                        // Only auto-center if:
+                        // 1. Never centered before (hasCenteredRef.current === false)
+                        // 2. OR user is more than 500m away from center
+                        if (!hasCenteredRef.current || distance > 500) {
                             mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15);
                             hasCenteredRef.current = true;
                         }
@@ -987,33 +989,66 @@ function MapViewContent() {
 
     // Handlers
     const handleLocateMe = useCallback(async () => {
+        // First try to use existing user location
         if (userLocation && mapRef.current) {
-            mapRef.current.setView([userLocation.latitude, userLocation.longitude], 16, {
-                animate: true,
-                duration: 0.5
-            });
-        } else {
-            try {
-                const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    });
-                });
+            const hasValidLocation = 
+                typeof userLocation.latitude === 'number' &&
+                typeof userLocation.longitude === 'number' &&
+                !isNaN(userLocation.latitude) &&
+                !isNaN(userLocation.longitude);
 
-                if (mapRef.current) {
-                    mapRef.current.setView(
-                        [position.coords.latitude, position.coords.longitude],
-                        16,
-                        { animate: true, duration: 0.5 }
-                    );
+            if (hasValidLocation) {
+                try {
+                    mapRef.current.setView([userLocation.latitude, userLocation.longitude], 16, {
+                        animate: true,
+                        duration: 0.5
+                    });
+                    addToast?.('📍 Вы на карте', 'success');
+                    return;
+                } catch (e) {
+                    console.error('Failed to center on user location:', e);
                 }
-            } catch (error) {
-                // Failed to get location
             }
         }
-    }, [userLocation]);
+
+        // Request fresh geolocation
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            });
+
+            if (mapRef.current && 
+                typeof position.coords.latitude === 'number' &&
+                typeof position.coords.longitude === 'number') {
+                mapRef.current.setView(
+                    [position.coords.latitude, position.coords.longitude],
+                    16,
+                    { animate: true, duration: 0.5 }
+                );
+                addToast?.('📍 Местоположение найдено', 'success');
+            }
+        } catch (error) {
+            console.error('Geolocation error:', error.message);
+            addToast?.('Не удалось получить местоположение', 'error');
+            
+            // If geolocation fails, try to use demo location if available
+            if (userLocation && userLocation.isDemo && mapRef.current) {
+                try {
+                    mapRef.current.setView([51.5074, -0.1278], 14, {
+                        animate: true,
+                        duration: 0.5
+                    });
+                    addToast?.('🧪 Демо режим активирован', 'info');
+                } catch (e) {
+                    console.error('Failed to center on demo location:', e);
+                }
+            }
+        }
+    }, [userLocation, addToast]);
 
     const handleFriendSelect = useCallback((friend) => {
         const location = friendLocations.find(l => l.user_id === friend.user_id);
@@ -1043,8 +1078,15 @@ function MapViewContent() {
     }, [setMapSettings]);
 
     const toggleFollowUser = useCallback(() => {
-        setMapSettings(prev => ({ ...prev, followUser: !prev.followUser }));
-    }, [setMapSettings]);
+        setMapSettings(prev => {
+            const newFollowUser = !prev.followUser;
+            // Reset the centered ref when toggling to allow re-centering
+            if (newFollowUser) {
+                hasCenteredRef.current = false;
+            }
+            return { ...prev, followUser: newFollowUser };
+        });
+    }, []);
 
     const toggleStats = useCallback(() => {
         setShowStats(prev => !prev);
