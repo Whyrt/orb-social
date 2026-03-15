@@ -5,9 +5,9 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false
   },
   realtime: {
     params: {
@@ -16,5 +16,9 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   },
   db: {
     schema: 'public'
+  },
+  // Отключаем лишние запросы
+  headers: {
+    'X-Client-Info': 'orb-social-net'
   }
 })

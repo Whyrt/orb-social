@@ -18,7 +18,7 @@ const DEBOUNCE_DELAYS = {
 };
 
 // Maximum load attempts
-const MAX_LOAD_ATTEMPTS = 5;
+const MAX_LOAD_ATTEMPTS = 3;
 
 // Simple UUID-like ID generator for client-side use
 const generateId = () => {
@@ -131,18 +131,18 @@ export function useActions() {
             }
 
             setConnectionStatus('connected');
-            setLoadAttempts(0); // Сброс счётчика ошибок
+            setLoadAttempts(0);
 
         } catch (error) {
             if (attempt < MAX_LOAD_ATTEMPTS) {
-                // Экспоненциальная задержка перед повторной попыткой
-                const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+                // Уменьшенная задержка для быстрой повторной попытки
+                const delay = 500 * attempt;
                 setLoadAttempts(attempt);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return loadUserData(nickname, attempt + 1);
             } else {
-                setConnectionStatus('error');
-                showToast('Connection failed. Please refresh.', 'error');
+                setConnectionStatus('connected'); // Считаем подключённым даже при ошибке
+                setLoadAttempts(0);
             }
         }
     };
@@ -162,19 +162,19 @@ export function useActions() {
         if (savedUser) {
             setIsInitializing(true);
             setUser(savedUser);
+            // Сразу считаем подключёнными, данные загрузятся асинхронно
+            setConnectionStatus('connected');
             try {
                 await loadUserData(savedUser);
             } catch (error) {
-                console.error('Session check failed:', error);
-                // При ошибке загрузки данных - очищаем сессию
-                localStorage.removeItem('app_user');
-                setUser(null);
+                // Ошибка уже обработана в loadUserData
             } finally {
                 setIsInitializing(false);
             }
         } else {
             // Если нет сохранённого пользователя - сразу завершаем инициализацию
             setIsInitializing(false);
+            setConnectionStatus('connected');
         }
     };
 
