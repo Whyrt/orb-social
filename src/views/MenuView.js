@@ -4,10 +4,10 @@ import { userAtom, globalPlayerAtom, viewAtom } from '@/atoms';
 import { useActions } from '@/lib/actions';
 import { useDevice } from '@/hooks/useDevice';
 
-// Dynamic import for MiniMapPreview - ОТКЛЮЧЕНА ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ
-// const MiniMapPreview = React.lazy(() =>
-//     import('@/views/MapView').then(module => ({ default: module.MiniMapPreview }))
-// );
+// Dynamic import for MiniMapPreview
+const MiniMapPreview = React.lazy(() =>
+    import('@/views/MapView').then(module => ({ default: module.MiniMapPreview }))
+);
 
 /**
  * MenuView - Main Dashboard (Home)
@@ -123,7 +123,7 @@ export default function MenuView() {
                         </button>
                     </div>
 
-                    {/* Mini map preview - ОТКЛЮЧЕНА ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ
+                    {/* Mini map preview */}
                     <Suspense fallback={
                         <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--foreground-muted)', fontSize: '12px' }}>
                             Loading map...
@@ -134,7 +134,6 @@ export default function MenuView() {
                             onOpenMap={handleOpenMap}
                         />
                     </Suspense>
-                    */}
 
                     {/* Card footer - Quick stats */}
                     <div className="px-4 py-3 border-t"

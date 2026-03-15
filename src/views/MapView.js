@@ -611,53 +611,58 @@ function MapViewContent() {
         if (mapRef.current || initAttemptedRef.current) return;
 
         // Проверка что контейнер имеет размер
-        const rect = mapContainerRef.current.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) {
-            console.warn('Map container has zero size, delaying init');
-            initAttemptedRef.current = false;
-            return;
-        }
+        const checkContainerSize = () => {
+            const rect = mapContainerRef.current?.getBoundingClientRect();
+            if (!rect || rect.width === 0 || rect.height === 0) {
+                // Пробуем ещё раз через 100мс
+                setTimeout(checkContainerSize, 100);
+                return;
+            }
+            
+            initAttemptedRef.current = true;
 
-        initAttemptedRef.current = true;
+            try {
+                // Fix Leaflet default icons
+                delete L.Icon.Default.prototype._getIconUrl;
+                L.Icon.Default.mergeOptions({
+                    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+                    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                });
 
-        try {
-            // Fix Leaflet default icons
-            delete L.Icon.Default.prototype._getIconUrl;
-            L.Icon.Default.mergeOptions({
-                iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-            });
+                mapRef.current = L.map(mapContainerRef.current, {
+                    zoomControl: false,
+                    attributionControl: false,
+                    zoomAnimation: true,
+                    fadeAnimation: true,
+                    markerZoomAnimation: true,
+                    minZoom: 2,
+                    maxZoom: 19,
+                    worldCopyJump: true,
+                    center: [51.505, -0.09],
+                    zoom: 13,
+                    preferCanvas: true,
+                    zoomSnap: 0.5,
+                    wheelDebounceTime: 150,
+                    zoomDelta: 0.5,
+                });
 
-            mapRef.current = L.map(mapContainerRef.current, {
-                zoomControl: false,
-                attributionControl: false,
-                zoomAnimation: true,
-                fadeAnimation: true,
-                markerZoomAnimation: true,
-                minZoom: 2,
-                maxZoom: 19,
-                worldCopyJump: true,
-                center: [51.505, -0.09],
-                zoom: 13,
-                preferCanvas: true,
-                zoomSnap: 0.5,
-                wheelDebounceTime: 150,
-                zoomDelta: 0.5,
-            });
+                setMapInstance(mapRef.current);
 
-            setMapInstance(mapRef.current);
+                L.control.attribution({
+                    position: 'bottomright',
+                    prefix: ''
+                }).addTo(mapRef.current);
 
-            L.control.attribution({
-                position: 'bottomright',
-                prefix: ''
-            }).addTo(mapRef.current);
+                setMapLoaded(true);
 
-            setMapLoaded(true);
+            } catch (error) {
+                setInitError(error.message);
+            }
+        };
 
-        } catch (error) {
-            setInitError(error.message);
-        }
+        // Начинаем проверку размера контейнера
+        checkContainerSize();
 
         return () => {
             if (mapRef.current) {
