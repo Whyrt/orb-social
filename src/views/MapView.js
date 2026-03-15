@@ -449,13 +449,21 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
             }
         });
 
-        const center = userLocation && userLocation.latitude && userLocation.longitude
+        // Используем дефолтный центр если нет локации
+        const defaultCenter = [51.505, -0.09];
+        const hasValidLocation = userLocation && 
+                                  typeof userLocation.latitude === 'number' && 
+                                  typeof userLocation.longitude === 'number' &&
+                                  !isNaN(userLocation.latitude) && 
+                                  !isNaN(userLocation.longitude);
+        
+        const center = hasValidLocation
             ? [userLocation.latitude, userLocation.longitude]
-            : [51.505, -0.09];
+            : defaultCenter;
 
-        mapRef.current.setView(center, userLocation ? 14 : 13, { animate: true });
+        mapRef.current.setView(center, hasValidLocation ? 14 : 13);
 
-        if (userLocation && userLocation.latitude && userLocation.longitude) {
+        if (hasValidLocation) {
             const userIcon = createUserMarker(theme === 'dark');
             L.marker([userLocation.latitude, userLocation.longitude], {
                 icon: userIcon,
@@ -473,7 +481,11 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
 
         const isDark = theme === 'dark' || theme === 'system';
         friendLocations.slice(0, 5).forEach((friend) => {
-            if (friend && friend.latitude && friend.longitude) {
+            if (friend && 
+                typeof friend.latitude === 'number' && 
+                typeof friend.longitude === 'number' &&
+                !isNaN(friend.latitude) && 
+                !isNaN(friend.longitude)) {
                 const friendIcon = createFriendMarker(friend.isOnline, isDark);
                 L.marker([friend.latitude, friend.longitude], {
                     icon: friendIcon,
@@ -718,7 +730,13 @@ function MapViewContent() {
             return;
         }
 
-        if (!userLocation || !userLocation.latitude || !userLocation.longitude) {
+        const hasValidLocation = userLocation && 
+                                  typeof userLocation.latitude === 'number' && 
+                                  typeof userLocation.longitude === 'number' &&
+                                  !isNaN(userLocation.latitude) && 
+                                  !isNaN(userLocation.longitude);
+
+        if (!hasValidLocation) {
             return;
         }
 
@@ -765,10 +783,7 @@ function MapViewContent() {
                         
                         // Only auto-center if user is more than 500m away from center
                         if (distance > 500 || !hasCenteredRef.current) {
-                            mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15, {
-                                animate: true,
-                                duration: 0.5
-                            });
+                            mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15);
                             hasCenteredRef.current = true;
                         }
                     }
