@@ -523,6 +523,7 @@ function MapViewContent() {
     const fogOverlayRef = useRef(null);
     const initAttemptedRef = useRef(false);
     const tileLayerRef = useRef(null);
+    const hasCenteredRef = useRef(false); // Track if we've centered on user
 
     const user = useAtomValue(userAtom);
     const userLocation = useAtomValue(userLocationAtom);
@@ -639,7 +640,7 @@ function MapViewContent() {
         };
     }, [setMapInstance]);
 
-    // Update tiles
+    // Update tiles - ONLY on theme change, NOT on userLocation change
     useEffect(() => {
         if (!mapRef.current || !mapLoaded) return;
 
@@ -686,7 +687,7 @@ function MapViewContent() {
             }
         }, 100);
 
-    }, [theme, userLocation, mapLoaded]);
+    }, [theme, mapLoaded]); // Removed userLocation from dependencies
 
     // Initialize Fog of War
     useEffect(() => {
@@ -711,6 +712,7 @@ function MapViewContent() {
     }, [exploredZones, mapSettings.showFogOfWar, theme, mapLoaded]);
 
     // CRITICAL: Update user marker - simplified and reliable
+    // Only update marker position, don't follow user on every location update
     useEffect(() => {
         if (!mapRef.current || !mapLoaded) {
             return;
@@ -748,12 +750,25 @@ function MapViewContent() {
                 </div>
             `);
 
-            // Auto-follow if enabled
+            // Auto-follow ONLY on initial load or when zoom is far from user
+            // Don't follow on every small location update
             if (mapSettings.followUser) {
-                mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15, {
-                    animate: true,
-                    duration: 0.5
-                });
+                const currentCenter = mapRef.current.getCenter();
+                const distance = calculateDistance(
+                    currentCenter.lat,
+                    currentCenter.lng,
+                    latitude,
+                    longitude
+                );
+                
+                // Only auto-center if user is more than 500m away from center
+                if (distance > 500 || !hasCenteredRef.current) {
+                    mapRef.current.setView([latitude, longitude], mapRef.current.getZoom() || 15, {
+                        animate: true,
+                        duration: 0.5
+                    });
+                    hasCenteredRef.current = true;
+                }
             }
         } catch (error) {
             // Error creating marker

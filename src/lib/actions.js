@@ -219,16 +219,28 @@ export function useActions() {
                 return;
             }
 
-            const { data: inv, error: inviteError } = await supabase.from('invites')
-                .select('*')
-                .eq('code', code.trim().toUpperCase())
-                .eq('is_used', false)
-                .single();
+            const normalizedCode = code.trim().toUpperCase();
 
-            if (inviteError || !inv) {
+            // Query invites without .single() to avoid 406 errors
+            const { data: invites, error: inviteError } = await supabase
+                .from('invites')
+                .select('*')
+                .eq('code', normalizedCode)
+                .eq('is_used', false);
+
+            if (inviteError) {
+                console.error('Invite query error:', inviteError);
                 showToast('Invalid Key', 'error');
                 return;
             }
+
+            if (!invites || invites.length === 0) {
+                showToast('Invalid Key', 'error');
+                return;
+            }
+
+            // Take the first valid invite
+            const inv = invites[0];
 
             const { error: insertError } = await supabase.from('members').insert([{
                 nickname: nick,
@@ -237,20 +249,29 @@ export function useActions() {
             }]);
 
             if (insertError) {
+                console.error('Member insert error:', insertError);
                 showToast('Nickname taken', 'error');
                 return;
             }
 
-            await supabase.from('invites').update({
+            const { error: updateError } = await supabase.from('invites').update({
                 is_used: true,
                 used_by_nickname: nick
-            }).eq('code', code);
+            }).eq('code', normalizedCode);
+
+            if (updateError) {
+                console.error('Invite update error:', updateError);
+            }
 
             if (inv.generated_by_nickname) {
-                await supabase.from('friends_old_backup').insert([{
+                const { error: friendError } = await supabase.from('friends_old_backup').insert([{
                     user1_nickname: nick,
                     user2_nickname: inv.generated_by_nickname
                 }]);
+
+                if (friendError) {
+                    console.error('Friend insert error:', friendError);
+                }
             }
 
             localStorage.setItem('app_user', nick);
@@ -259,6 +280,7 @@ export function useActions() {
             showToast('Node Created');
             setView('menu');
         } catch (error) {
+            console.error('Register error:', error);
             showToast('Network error', 'error');
         } finally {
             setLoading(false);
