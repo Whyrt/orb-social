@@ -18,6 +18,7 @@ import {
 import { calculateDistance } from '@/hooks/useGeolocation';
 import { useFriendLocations } from '@/hooks/useFriendLocations';
 import { useActions } from '@/lib/actions';
+import LocationPermissionRequest from '@/components/ui/LocationPermissionRequest';
 
 // Import Leaflet CSS
 import 'leaflet/dist/leaflet.css';
@@ -614,6 +615,14 @@ function MapViewContent() {
     const [showStats, setShowStats] = useState(false);
     const [tileError, setTileError] = useState(false);
     const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+    const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+    const [userDeniedLocation, setUserDeniedLocation] = useState(() => {
+        // Check localStorage for previous denial
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('orb_location_denied') === 'true';
+        }
+        return false;
+    });
 
     // Load explored zones
     useEffect(() => {
@@ -639,7 +648,24 @@ function MapViewContent() {
         navigator.permissions.query({ name: 'geolocation' })
             .then(result => {
                 setLocationPermission(result.state);
-                result.onchange = () => setLocationPermission(result.state);
+                
+                // If previously denied and user changed permission, reset the flag
+                if (result.state === 'granted' && userDeniedLocation) {
+                    setUserDeniedLocation(false);
+                    localStorage.removeItem('orb_location_denied');
+                    addToast?.('📍 Геолокация включена', 'success');
+                }
+                
+                result.onchange = () => {
+                    setLocationPermission(result.state);
+                    
+                    // If permission was granted after being denied
+                    if (result.state === 'granted' && userDeniedLocation) {
+                        setUserDeniedLocation(false);
+                        localStorage.removeItem('orb_location_denied');
+                        addToast?.('📍 Геолокация включена', 'success');
+                    }
+                };
             })
             .catch(() => {
                 setLocationPermission('prompt');
@@ -655,7 +681,7 @@ function MapViewContent() {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, []);
+    }, [userDeniedLocation, addToast]);
 
     // Initialize map
     useEffect(() => {
@@ -1212,7 +1238,7 @@ function MapViewContent() {
             )}
 
             {/* Location Permission Warning */}
-            {locationPermission === 'denied' && (
+            {locationPermission === 'denied' || userDeniedLocation ? (
                 <div className="location-permission-warning">
                     <div className="warning-content">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1220,11 +1246,54 @@ function MapViewContent() {
                             <line x1="12" y1="8" x2="12" y2="12"></line>
                             <line x1="12" y1="16" x2="12.01" y2="16"></line>
                         </svg>
-                        <p><strong>Location Access Denied</strong></p>
-                        <p className="warning-subtext">Используйте демо&#39;режим для просмотра карты</p>
+                        <p><strong>Доступ к геолокации запрещён</strong></p>
+                        <p className="warning-subtext">
+                            {userDeniedLocation 
+                                ? 'Вы отказали в доступе. Используйте демо-режим или включите в настройках.'
+                                : 'Используйте демо-режим или включите геолокацию в настройках браузера.'
+                            }
+                        </p>
+                        <div className="flex gap-2 mt-3">
+                            <button
+                                className="permission-retry-btn"
+                                onClick={() => setShowPermissionDialog(true)}
+                                style={{
+                                    padding: '8px 16px',
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    backgroundColor: 'var(--accent)',
+                                    color: 'var(--accent-text)',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                🔁 Включить
+                            </button>
+                            <button
+                                className="permission-demo-btn"
+                                onClick={() => {
+                                    setUserDeniedLocation(true);
+                                    localStorage.setItem('orb_location_denied', 'true');
+                                    addToast?.('🧪 Демо-режим активирован', 'info');
+                                }}
+                                style={{
+                                    padding: '8px 16px',
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    backgroundColor: 'transparent',
+                                    color: 'var(--foreground-muted)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Демо
+                            </button>
+                        </div>
                     </div>
                 </div>
-            )}
+            ) : null}
 
             {/* Init Error */}
             {initError && (
@@ -1253,6 +1322,27 @@ function MapViewContent() {
                     <p>Loading map...</p>
                     {!isOnline && <p className="offline-note">Offline mode active</p>}
                 </div>
+            )}
+
+            {/* Permission Dialog */}
+            {showPermissionDialog && (
+                <LocationPermissionRequest
+                    onAllow={() => {
+                        setUserDeniedLocation(false);
+                        localStorage.removeItem('orb_location_denied');
+                        setShowPermissionDialog(false);
+                        addToast?.('📍 Геолокация включена', 'success');
+                        // Reload to reinitialize geolocation tracking
+                        setTimeout(() => window.location.reload(), 500);
+                    }}
+                    onDeny={() => {
+                        setUserDeniedLocation(true);
+                        localStorage.setItem('orb_location_denied', 'true');
+                        setShowPermissionDialog(false);
+                        addToast?.('🧪 Демо-режим активирован', 'info');
+                    }}
+                    onClose={() => setShowPermissionDialog(false)}
+                />
             )}
         </div>
     );
