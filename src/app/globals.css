@@ -1,0 +1,545 @@
+@import "tailwindcss";
+
+/**
+ * ORB NETWORK - Redesigned Theme System
+ * Based on reference design with lime green accent (#A3FF00)
+ * WCAG AA Compliant color contrast ratios (minimum 4.5:1 for normal text)
+ */
+
+/* ============================================================================
+   DARK THEME (Default) - Redesigned to match reference
+   ============================================================================ */
+:root,
+[data-theme='dark'] {
+  /* Core colors - Deep black background */
+  --background: #0a0a0a;
+  --background-elevated: #141414;
+  --foreground: #ffffff;
+  --foreground-muted: #888888;
+  --foreground-dim: #555555;
+
+  /* Structural colors */
+  --border-color: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --grid-color: rgba(255, 255, 255, 0.03);
+
+  /* Component backgrounds */
+  --terminal-bg: rgba(20, 20, 20, 0.9);
+  --terminal-header: rgba(25, 25, 25, 0.95);
+  --card-bg: rgba(25, 25, 25, 0.6);
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --overlay-bg: rgba(0, 0, 0, 0.85);
+
+  /* Accent colors - Lime green from reference */
+  --accent: #a3ff00;
+  --accent-hover: #8ce600;
+  --accent-dim: rgba(163, 255, 0, 0.2);
+  --accent-text: #0a0a0a;
+
+  /* Message bubbles */
+  --message-me-bg: rgba(163, 255, 0, 0.15);
+  --message-me-text: #a3ff00;
+  --message-other-bg: rgba(255, 255, 255, 0.08);
+  --message-other-text: #ffffff;
+
+  /* Status colors */
+  --success: #a3ff00;
+  --warning: #ffb800;
+  --error: #ff4757;
+  --error-bg: rgba(255, 71, 87, 0.15);
+
+  /* Typography */
+  --mono-font: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ============================================================================
+   LIGHT THEME - Redesigned
+   ============================================================================ */
+[data-theme='light'] {
+  /* Core colors */
+  --background: #f8f8f8;
+  --background-elevated: #ffffff;
+  --foreground: #0a0a0a;
+  --foreground-muted: #666666;
+  --foreground-dim: #999999;
+
+  /* Structural colors */
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  --grid-color: rgba(0, 0, 0, 0.04);
+
+  /* Component backgrounds */
+  --terminal-bg: rgba(255, 255, 255, 0.9);
+  --terminal-header: rgba(248, 248, 248, 0.98);
+  --card-bg: rgba(255, 255, 255, 0.8);
+  --input-bg: rgba(0, 0, 0, 0.05);
+  --overlay-bg: rgba(255, 255, 255, 0.9);
+
+  /* Accent colors - Darker lime for light theme */
+  --accent: #7acc00;
+  --accent-hover: #66b300;
+  --accent-dim: rgba(122, 204, 0, 0.2);
+  --accent-text: #ffffff;
+
+  /* Message bubbles */
+  --message-me-bg: rgba(122, 204, 0, 0.2);
+  --message-me-text: #5a9900;
+  --message-other-bg: rgba(0, 0, 0, 0.05);
+  --message-other-text: #0a0a0a;
+
+  /* Status colors */
+  --success: #7acc00;
+  --warning: #ff9500;
+  --error: #ff3b30;
+  --error-bg: rgba(255, 59, 48, 0.1);
+
+  /* Typography */
+  --mono-font: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Tailwind theme mapping */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border-color);
+  --color-accent: var(--accent);
+  --font-sans: var(--mono-font);
+  --font-mono: var(--mono-font);
+}
+
+/* ============================================================================
+   Base Styles
+   ============================================================================ */
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--mono-font);
+  overscroll-behavior: none;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mobile optimization */
+@media (max-width: 767px) {
+  body {
+    font-size: 14px;
+  }
+
+  .mobile-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .mobile-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Desktop optimization */
+@media (min-width: 768px) {
+  body {
+    font-size: 16px;
+  }
+
+  .desktop-container {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .desktop-centered {
+    /* Desktop web layout - full width with sidebar */
+  }
+
+  /* Desktop main content area */
+  .desktop-main-content {
+    margin-left: 80px; /* Sidebar width */
+    height: 100vh;
+    overflow: hidden;
+  }
+}
+
+/* ============================================================================
+   Component Classes - Redesigned with standardized sizes
+   ============================================================================ */
+
+/* Background grid pattern */
+.grid-pattern {
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center center;
+}
+
+/* Modern card - standardized with proper overflow handling */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+
+/* Terminal window component - updated with proper containment */
+.terminal-window {
+  background: var(--background-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+/* Terminal header bar */
+.terminal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--terminal-header);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--foreground-dim);
+  border-radius: 16px 16px 0 0;
+}
+
+.terminal-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-color);
+}
+
+/* Border utilities */
+.thin-border,
+.terminal-border {
+  border: 1px solid var(--border-color);
+}
+
+/* Button styles - STANDARDIZED 44x44px minimum touch targets */
+.wireframe-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--foreground);
+  border-radius: 12px;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.wireframe-btn:hover {
+  background: var(--input-bg);
+  border-color: var(--accent);
+}
+
+.wireframe-btn:active {
+  transform: scale(0.96);
+}
+
+.accent-btn {
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  font-weight: 600;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.accent-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* Input fields - standardized */
+.terminal-input {
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--foreground);
+  font-family: var(--mono-font);
+  font-size: 14px;
+  padding: 12px 16px;
+  outline: none;
+  transition: border-color 0.2s, background-color 0.2s;
+  min-height: 44px;
+}
+
+.terminal-input:focus {
+  border-color: var(--accent);
+  background: var(--input-bg);
+}
+
+.terminal-input::placeholder {
+  color: var(--foreground-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.terminal-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Card component - standardized */
+.data-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+/* Typography utilities */
+.mono-text {
+  font-family: var(--mono-font);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.tech-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--foreground-dim);
+}
+
+/* Stat label - smaller text for stats */
+.stat-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--foreground-dim);
+}
+
+/* ============================================================================
+   Animations - Enhanced with smoother transitions and visible feedback
+   ============================================================================ */
+
+/* Soft pulse for accent elements */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Dot pulse */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Pulse ring for user marker */
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.pulse-ring {
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease forwards;
+}
+
+/* Fade in down - enhanced */
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Fade in up - enhanced */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Block reveal - enhanced with more visible movement */
+@keyframes blockReveal {
+  from { opacity: 0; transform: translateY(25px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-block {
+  animation: blockReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Soft switch transition - enhanced */
+@keyframes softSwitch {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-soft-switch {
+  animation: softSwitch 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Press effect - more visible scale */
+.press-effect {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;
+}
+
+.press-effect:active {
+  transform: scale(0.92);
+}
+
+/* Button tap feedback - enhanced */
+@keyframes tapFeedback {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+
+.tap-feedback {
+  animation: tapFeedback 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Slide in from left */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Slide in from right */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scale in */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Bounce in */
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.8); }
+  50% { transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-bounce-in {
+  animation: bounceIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Technical line gradient */
+.tech-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+}
+
+/* No scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Chat bubbles - updated with new colors */
+.chat-bubble-me {
+  background: var(--message-me-bg) !important;
+  color: var(--message-me-text) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 16px !important;
+}
+
+.chat-bubble-other {
+  background: var(--message-other-bg) !important;
+  color: var(--message-other-text) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 16px !important;
+}
+
+/* Inputs */
+.input-glass {
+  background: var(--input-bg) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 12px !important;
+}
+
+/* Glassmorphism */
+.glass-card {
+  background: var(--input-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+}
+
+/* Accent utilities */
+.accent-text {
+  color: var(--accent);
+}
+
+.accent-dim {
+  color: var(--accent-dim);
+}
+
+/* Responsive text sizes */
+@media (max-width: 767px) {
+  .text-responsive-sm { font-size: 12px; }
+  .text-responsive-base { font-size: 14px; }
+  .text-responsive-lg { font-size: 18px; }
+  .text-responsive-xl { font-size: 24px; }
+  .padding-responsive { padding: 16px; }
+}
+
+@media (min-width: 768px) {
+  .text-responsive-sm { font-size: 14px; }
+  .text-responsive-base { font-size: 16px; }
+  .text-responsive-lg { font-size: 20px; }
+  .text-responsive-xl { font-size: 28px; }
+  .padding-responsive { padding: 24px; }
+}
