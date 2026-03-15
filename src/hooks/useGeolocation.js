@@ -375,7 +375,7 @@ export function useGeolocation() {
         };
     }, [user, locationSharing]);
 
-    // Start/stop watching
+    // Start/stop watching on mount and when locationSharing changes
     useEffect(() => {
         if (locationSharing) {
             startWatching();
@@ -388,7 +388,7 @@ export function useGeolocation() {
         };
     }, [locationSharing, startWatching, stopWatching]);
 
-    // Cleanup
+    // Cleanup on unmount
     useEffect(() => {
         return () => {
             stopWatching();
@@ -408,6 +408,56 @@ export function useGeolocation() {
         permissionState,
         hasPermission: permissionState === 'granted',
         isDenied: permissionState === 'denied'
+    };
+}
+
+/**
+ * Hook for tracking geolocation at app level (without map UI dependencies)
+ * This should be used in Orb.js or AppInitializer to track location from startup
+ */
+export function useGeolocationTracker() {
+    const locationSharing = useAtomValue(locationSharingAtom);
+    const user = useAtomValue(userAtom);
+
+    const { startWatching, stopWatching, error, permissionState } = useGeolocation();
+
+    // Start tracking on mount when location sharing is enabled
+    useEffect(() => {
+        if (locationSharing) {
+            startWatching();
+            console.log('🛰️ Geolocation tracking started at app level');
+        }
+
+        return () => {
+            stopWatching();
+            console.log('🛰️ Geolocation tracking stopped');
+        };
+    }, [locationSharing, startWatching, stopWatching]);
+
+    // Setup Supabase Realtime channel for broadcasting location
+    useEffect(() => {
+        if (!user || !locationSharing) return;
+
+        const channel = supabase.channel('user_locations_broadcast', {
+            config: {
+                broadcast: { self: true },
+                presence: { key: user.id }
+            }
+        });
+
+        channel.subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user, locationSharing]);
+
+    return {
+        error,
+        permissionState,
+        hasPermission: permissionState === 'granted',
+        isDenied: permissionState === 'denied',
+        isTracking: locationSharing
     };
 }
 

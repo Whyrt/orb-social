@@ -16,6 +16,7 @@ import { useActions } from '@/lib/actions';
 import useAudioData from '@/hooks/useAudioData';
 import { useDevice } from '@/hooks/useDevice';
 import { useTheme } from '@/hooks/useTheme';
+import { useGeolocationTracker } from '@/hooks/useGeolocation';
 
 import GlobalStyles from '@/styles/GlobalStyles';
 import ToastContainer from '@/components/ui/ToastContainer';
@@ -128,6 +129,7 @@ function Interface() {
 function OrbContent() {
     useAppInitializer();
     useTheme(); // Apply theme on load
+    useGeolocationTracker(); // Start tracking location from app launch
 
     const store = useStore();
     const view = useAtomValue(viewAtom);

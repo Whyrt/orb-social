@@ -15,7 +15,7 @@ import {
     viewAtom,
     themeAtom
 } from '@/atoms';
-import { useGeolocation, calculateDistance } from '@/hooks/useGeolocation';
+import { calculateDistance } from '@/hooks/useGeolocation';
 import { useFriendLocations } from '@/hooks/useFriendLocations';
 import { useActions } from '@/lib/actions';
 
