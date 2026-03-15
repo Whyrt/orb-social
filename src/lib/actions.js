@@ -191,39 +191,58 @@ export function useActions() {
     const register = async (nick, pass, code) => {
         setLoading(true);
         try {
+            // Validate inputs
+            if (!nick || !pass || !code) {
+                showToast('All fields required', 'error');
+                setLoading(false);
+                return;
+            }
+
+            if (nick.length < 3) {
+                showToast('Nickname too short (min 3 chars)', 'error');
+                setLoading(false);
+                return;
+            }
+
+            if (pass.length < 4) {
+                showToast('Password too short (min 4 chars)', 'error');
+                setLoading(false);
+                return;
+            }
+
             const { data: inv, error: inviteError } = await supabase.from('invites')
                 .select('*')
                 .eq('code', code)
                 .eq('is_used', false)
                 .single();
-            
+
             if (inviteError || !inv) {
                 setLoading(false);
                 showToast('Invalid Key', 'error');
                 return;
             }
 
-            const { error: insertError } = await supabase.from('members').insert([{ 
-                nickname: nick, 
-                password: pass, 
-                balance: 100 
+            const { error: insertError } = await supabase.from('members').insert([{
+                nickname: nick,
+                password: pass,
+                balance: 100
             }]);
-            
+
             if (insertError) {
                 showToast('Nickname taken', 'error');
                 setLoading(false);
                 return;
             }
 
-            await supabase.from('invites').update({ 
-                is_used: true, 
-                used_by_nickname: nick 
+            await supabase.from('invites').update({
+                is_used: true,
+                used_by_nickname: nick
             }).eq('code', code);
-            
+
             if (inv.generated_by_nickname) {
-                await supabase.from('friends').insert([{ 
-                    user1_nickname: nick, 
-                    user2_nickname: inv.generated_by_nickname 
+                await supabase.from('friends_old_backup').insert([{
+                    user1_nickname: nick,
+                    user2_nickname: inv.generated_by_nickname
                 }]);
             }
 
