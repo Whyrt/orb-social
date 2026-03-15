@@ -92,7 +92,7 @@ export function useActions() {
 
     // === USER DATA LOADING WITH ERROR HANDLING ===
     const loadUserData = async (nickname, attempt = 1) => {
-        if (!nickname) return;
+        if (!nickname) return Promise.resolve();
 
         try {
             setConnectionStatus('connecting');
@@ -138,7 +138,8 @@ export function useActions() {
                 // Экспоненциальная задержка перед повторной попыткой
                 const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
                 setLoadAttempts(attempt);
-                setTimeout(() => loadUserData(nickname, attempt + 1), delay);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return loadUserData(nickname, attempt + 1);
             } else {
                 setConnectionStatus('error');
                 showToast('Connection failed. Please refresh.', 'error');
@@ -161,7 +162,18 @@ export function useActions() {
         if (savedUser) {
             setIsInitializing(true);
             setUser(savedUser);
-            await loadUserData(savedUser);
+            try {
+                await loadUserData(savedUser);
+            } catch (error) {
+                console.error('Session check failed:', error);
+                // При ошибке загрузки данных - очищаем сессию
+                localStorage.removeItem('app_user');
+                setUser(null);
+            } finally {
+                setIsInitializing(false);
+            }
+        } else {
+            // Если нет сохранённого пользователя - сразу завершаем инициализацию
             setIsInitializing(false);
         }
     };
@@ -194,30 +206,26 @@ export function useActions() {
             // Validate inputs
             if (!nick || !pass || !code) {
                 showToast('All fields required', 'error');
-                setLoading(false);
                 return;
             }
 
             if (nick.length < 3) {
                 showToast('Nickname too short (min 3 chars)', 'error');
-                setLoading(false);
                 return;
             }
 
             if (pass.length < 4) {
                 showToast('Password too short (min 4 chars)', 'error');
-                setLoading(false);
                 return;
             }
 
             const { data: inv, error: inviteError } = await supabase.from('invites')
                 .select('*')
-                .eq('code', code)
+                .eq('code', code.trim().toUpperCase())
                 .eq('is_used', false)
                 .single();
 
             if (inviteError || !inv) {
-                setLoading(false);
                 showToast('Invalid Key', 'error');
                 return;
             }
@@ -230,7 +238,6 @@ export function useActions() {
 
             if (insertError) {
                 showToast('Nickname taken', 'error');
-                setLoading(false);
                 return;
             }
 
@@ -253,8 +260,9 @@ export function useActions() {
             setView('menu');
         } catch (error) {
             showToast('Network error', 'error');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     // === LOGOUT WITH FULL STATE CLEANUP ===
