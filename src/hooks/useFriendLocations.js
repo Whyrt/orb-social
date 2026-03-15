@@ -12,9 +12,9 @@ import { supabase } from '@/lib/supabase';
  */
 export function useFriendLocations() {
     const setFriendLocations = useSetAtom(friendLocationsAtom);
-    const user = useAtomValue(userAtom);
-    const friends = useAtomValue(friendsAtom);
-    
+    const user = useAtomValue(userAtom); // user - это никнейм (строка)
+    const friends = useAtomValue(friendsAtom); // friends - это массив никнеймов
+
     const channelRef = useRef(null);
     const presenceChannelRef = useRef(null);
 
@@ -28,9 +28,8 @@ export function useFriendLocations() {
         }
 
         try {
-            const friendIds = friends
-                .filter(f => f.status === 'accepted')
-                .map(f => f.friend_id === user.id ? f.user_id : f.friend_id);
+            // friends - это просто массив никнеймов в вашей системе
+            const friendIds = friends;
 
             if (friendIds.length === 0) {
                 setFriendLocations([]);
@@ -46,23 +45,18 @@ export function useFriendLocations() {
 
             // Enrich with friend data
             const enriched = data.map(location => {
-                const friend = friends.find(
-                    f => (f.friend_id === location.user_id || f.user_id === location.user_id)
-                );
                 return {
                     ...location,
-                    user: friend ? {
-                        id: location.user_id,
-                        username: friend.friend_id === user.id ? friend.user_id : friend.friend_id,
-                        // Add more friend data as needed
-                    } : null,
+                    user: {
+                        nickname: location.user_id,
+                    },
                     isOnline: isRecentlyActive(location.last_seen)
                 };
             });
 
             setFriendLocations(enriched);
         } catch (error) {
-            // Failed to fetch friend locations
+            // Игнорируем ошибки - это не критично для работы приложения
         }
     }, [user, friends, setFriendLocations]);
 
@@ -114,22 +108,15 @@ export function useFriendLocations() {
                 (payload) => {
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                         const newLocation = payload.new;
-                        
-                        // Check if this is a friend's location
-                        const friendIds = friends
-                            .filter(f => f.status === 'accepted')
-                            .map(f => f.friend_id === user.id ? f.user_id : f.friend_id);
 
-                        if (friendIds.includes(newLocation.user_id)) {
+                        // friends - это массив никнеймов
+                        if (friends.includes(newLocation.user_id)) {
                             setFriendLocations(prev => {
                                 const existing = prev.findIndex(l => l.user_id === newLocation.user_id);
-                                const friend = friends.find(
-                                    f => (f.friend_id === newLocation.user_id || f.user_id === newLocation.user_id)
-                                );
 
                                 const updated = {
                                     ...newLocation,
-                                    user: friend,
+                                    user: { nickname: newLocation.user_id },
                                     isOnline: isRecentlyActive(newLocation.last_seen)
                                 };
 
@@ -164,18 +151,11 @@ export function useFriendLocations() {
             .channel('user_locations_broadcast')
             .on('broadcast', { event: 'location_update' }, (payload) => {
                 const { user_id, latitude, longitude, accuracy, timestamp } = payload.payload;
-                
-                // Check if this is a friend
-                const friendIds = friends
-                    .filter(f => f.status === 'accepted')
-                    .map(f => f.friend_id === user.id ? f.user_id : f.friend_id);
 
-                if (friendIds.includes(user_id)) {
+                // Check if this is a friend (friends - массив никнеймов)
+                if (friends.includes(user_id)) {
                     setFriendLocations(prev => {
                         const existing = prev.findIndex(l => l.user_id === user_id);
-                        const friend = friends.find(
-                            f => (f.friend_id === user_id || f.user_id === user_id)
-                        );
 
                         const updated = {
                             user_id,
@@ -183,7 +163,7 @@ export function useFriendLocations() {
                             longitude,
                             accuracy,
                             last_seen: new Date(timestamp).toISOString(),
-                            user: friend,
+                            user: { nickname: user_id },
                             isOnline: true
                         };
 

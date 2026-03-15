@@ -163,14 +163,16 @@ export function useGeolocation() {
     const persistLocation = useCallback(async (latitude, longitude, accuracy) => {
         const now = Date.now();
         if (now - lastUpdateRef.current < 30000) return;
-        
+        if (!user) return; // Нет пользователя - не сохраняем
+
         lastUpdateRef.current = now;
 
         try {
+            // Используем nickname вместо user.id
             await supabase
                 .from('user_locations')
                 .upsert({
-                    user_id: user?.id,
+                    user_id: user, // user - это никнейм (строка)
                     latitude,
                     longitude,
                     accuracy: accuracy || 0,
@@ -179,7 +181,7 @@ export function useGeolocation() {
                     onConflict: 'user_id'
                 });
         } catch (error) {
-            // Failed to persist location
+            // Игнорируем ошибки сохранения локации - это не критично
         }
     }, [user]);
 
