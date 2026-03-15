@@ -1,6 +1,4 @@
 import "./globals.css";
-import HydrationProvider from "@/components/HydrationProvider";
-import ErrorBoundary from "@/components/ui/ErrorBoundary";
 
 export const metadata = {
   title: "ORB NETWORK",
@@ -47,9 +45,7 @@ export default function RootLayout({ children }) {
         <link rel="apple-touch-icon" href="/icon-192x192.svg" />
       </head>
       <body className="antialiased">
-        <ErrorBoundary>
-          <HydrationProvider>{children}</HydrationProvider>
-        </ErrorBoundary>
+        {children}
       </body>
     </html>
   );

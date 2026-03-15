@@ -7,7 +7,7 @@ export default function HydrationProvider({ children }) {
     // Get initialization state from atoms
     const isInitializing = useAtomValue(isInitializingAtom);
 
-    if (!isInitializing) {
+    if (isInitializing) {
         // Minimal loader during session check
         return (
              <div className="fixed inset-0 bg-black flex items-center justify-center">

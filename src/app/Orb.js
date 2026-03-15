@@ -31,6 +31,7 @@ import FriendsManageView from '@/views/FriendsManageView';
 import InvitesView from '@/views/InvitesView';
 import ChatView from '@/views/ChatView';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
+import ErrorBoundary from '@/components/ui/ErrorBoundary';
 
 // Dynamic import for MapView with SSR disabled (Leaflet requires browser)
 import dynamic from 'next/dynamic';
@@ -261,5 +262,11 @@ function OrbContent() {
 }
 
 export default function Orb() {
-    return <Provider><OrbContent /></Provider>;
+    return (
+        <Provider>
+            <ErrorBoundary>
+                <OrbContent />
+            </ErrorBoundary>
+        </Provider>
+    );
 }
