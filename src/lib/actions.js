@@ -181,13 +181,25 @@ export function useActions() {
     const login = async (nick, pass) => {
         setLoading(true);
         try {
-            const { data, error } = await supabase.from('members').select('*').eq('nickname', nick).eq('password', pass).single();
-            
-            if (error || !data) {
+            // Query without .single() to avoid 406 errors
+            const { data: users, error } = await supabase
+                .from('members')
+                .select('*')
+                .eq('nickname', nick)
+                .eq('password', pass);
+
+            if (error) {
+                console.error('Login query error:', error);
                 showToast('Access Denied', 'error');
-                setLoading(false);
                 return;
             }
+
+            if (!users || users.length === 0) {
+                showToast('Access Denied', 'error');
+                return;
+            }
+
+            const data = users[0];
 
             localStorage.setItem('app_user', nick);
             setUser(nick);
@@ -195,9 +207,11 @@ export function useActions() {
             showToast(`Welcome, ${nick}`);
             setView('menu');
         } catch (error) {
+            console.error('Login error:', error);
             showToast('Network error', 'error');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const register = async (nick, pass, code) => {
