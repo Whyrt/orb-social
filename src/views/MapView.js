@@ -449,13 +449,13 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
             }
         });
 
-        const center = userLocation 
-            ? [userLocation.latitude, userLocation.longitude] 
+        const center = userLocation && userLocation.latitude && userLocation.longitude
+            ? [userLocation.latitude, userLocation.longitude]
             : [51.505, -0.09];
-        
+
         mapRef.current.setView(center, userLocation ? 14 : 13, { animate: true });
 
-        if (userLocation) {
+        if (userLocation && userLocation.latitude && userLocation.longitude) {
             const userIcon = createUserMarker(theme === 'dark');
             L.marker([userLocation.latitude, userLocation.longitude], {
                 icon: userIcon,
@@ -473,7 +473,7 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
 
         const isDark = theme === 'dark' || theme === 'system';
         friendLocations.slice(0, 5).forEach((friend) => {
-            if (friend.latitude && friend.longitude) {
+            if (friend && friend.latitude && friend.longitude) {
                 const friendIcon = createFriendMarker(friend.isOnline, isDark);
                 L.marker([friend.latitude, friend.longitude], {
                     icon: friendIcon,
