@@ -351,6 +351,13 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
     const theme = useAtomValue(themeAtom);
     const [isInitialized, setIsInitialized] = useState(false);
 
+    // Don't render mini-map if no location yet - prevents null coordinate errors
+    const hasValidLocation = userLocation && 
+                              typeof userLocation.latitude === 'number' && 
+                              typeof userLocation.longitude === 'number' &&
+                              !isNaN(userLocation.latitude) && 
+                              !isNaN(userLocation.longitude);
+
     useEffect(() => {
         if (typeof window === 'undefined') return;
         if (!mapContainerRef.current || mapRef.current) return;
@@ -411,13 +418,13 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
                 mapRef.current = null;
             }
         };
-    }, [theme, userLocation]);
+    }, [theme]); // Removed userLocation from dependencies
 
     useEffect(() => {
         if (!mapRef.current) return;
 
         const isDark = theme === 'dark' || theme === 'system';
-        const tileUrl = isDark 
+        const tileUrl = isDark
             ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
             : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
@@ -438,7 +445,7 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
             maxNativeZoom: 18,
             crossOrigin: true,
         }).addTo(mapRef.current);
-    }, [theme, userLocation]);
+    }, [theme]); // Removed userLocation from dependencies
 
     useEffect(() => {
         if (!mapRef.current || !isInitialized) return;
@@ -451,12 +458,7 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
 
         // Используем дефолтный центр если нет локации
         const defaultCenter = [51.505, -0.09];
-        const hasValidLocation = userLocation && 
-                                  typeof userLocation.latitude === 'number' && 
-                                  typeof userLocation.longitude === 'number' &&
-                                  !isNaN(userLocation.latitude) && 
-                                  !isNaN(userLocation.longitude);
-        
+
         const center = hasValidLocation
             ? [userLocation.latitude, userLocation.longitude]
             : defaultCenter;
@@ -481,10 +483,10 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
 
         const isDark = theme === 'dark' || theme === 'system';
         friendLocations.slice(0, 5).forEach((friend) => {
-            if (friend && 
-                typeof friend.latitude === 'number' && 
+            if (friend &&
+                typeof friend.latitude === 'number' &&
                 typeof friend.longitude === 'number' &&
-                !isNaN(friend.latitude) && 
+                !isNaN(friend.latitude) &&
                 !isNaN(friend.longitude)) {
                 const friendIcon = createFriendMarker(friend.isOnline, isDark);
                 L.marker([friend.latitude, friend.longitude], {
@@ -494,7 +496,7 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
             }
         });
 
-    }, [userLocation, friendLocations, isInitialized, theme]);
+    }, [userLocation, friendLocations, isInitialized, theme, hasValidLocation]);
 
     useEffect(() => {
         if (mapRef.current && isInitialized) {
