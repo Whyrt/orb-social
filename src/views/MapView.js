@@ -450,6 +450,12 @@ export function MiniMapPreview({ width = '100%', height = 200, onOpenMap, classN
     useEffect(() => {
         if (!mapRef.current || !isInitialized) return;
 
+        // Проверка что карта имеет размер
+        const mapContainer = mapRef.current.getContainer();
+        if (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0) {
+            return;
+        }
+
         mapRef.current.eachLayer((layer) => {
             if (layer instanceof L.Marker || layer instanceof L.Circle) {
                 mapRef.current.removeLayer(layer);
@@ -603,6 +609,14 @@ function MapViewContent() {
         if (typeof window === 'undefined') return;
         if (!mapContainerRef.current) return;
         if (mapRef.current || initAttemptedRef.current) return;
+
+        // Проверка что контейнер имеет размер
+        const rect = mapContainerRef.current.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            console.warn('Map container has zero size, delaying init');
+            initAttemptedRef.current = false;
+            return;
+        }
 
         initAttemptedRef.current = true;
 
